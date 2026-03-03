@@ -9,7 +9,7 @@ A collection of [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 
 | [Apple Notes](#apple-notes) | Done | Read, create, update, and delete notes and folders |
 | [Apple Messages](#apple-messages) | Done | Read message history, search conversations, and send messages |
 | [Apple Contacts](#apple-contacts) | Done | Manage contacts and contact groups |
-| Apple Mail | Planned | Read, send, and manage email |
+| [Apple Mail](#apple-mail) | Done | Read, send, and manage email |
 | [Apple Reminders](#apple-reminders) | Done | Create and manage reminders and lists |
 | [Apple Calendar](#apple-calendar) | Done | Manage calendar events and schedules |
 | [Apple Maps](#apple-maps) | Done | Search locations, get directions, and place details |
@@ -42,6 +42,9 @@ npx @griches/apple-calendar-mcp
 
 # Apple Maps
 npx @griches/apple-maps-mcp
+
+# Apple Mail
+npx @griches/apple-mail-mcp
 ```
 
 ### Claude Code
@@ -53,6 +56,7 @@ claude mcp add apple-contacts -- npx @griches/apple-contacts-mcp
 claude mcp add apple-reminders -- npx @griches/apple-reminders-mcp
 claude mcp add apple-calendar -- npx @griches/apple-calendar-mcp
 claude mcp add apple-maps -- npx @griches/apple-maps-mcp
+claude mcp add apple-mail -- npx @griches/apple-mail-mcp
 ```
 
 ### Claude Desktop
@@ -85,6 +89,10 @@ Add to your `claude_desktop_config.json`:
     "apple-maps": {
       "command": "npx",
       "args": ["@griches/apple-maps-mcp"]
+    },
+    "apple-mail": {
+      "command": "npx",
+      "args": ["@griches/apple-mail-mcp"]
     }
   }
 }
@@ -115,6 +123,9 @@ cd ../calendar && npm install && npm run build
 
 # Apple Maps
 cd ../maps && npm install && npm run build
+
+# Apple Mail
+cd ../mail && npm install && npm run build
 ```
 
 Then configure your MCP client to run the built files directly:
@@ -145,6 +156,10 @@ Then configure your MCP client to run the built files directly:
     "apple-maps": {
       "command": "node",
       "args": ["/absolute/path/to/maps/build/index.js"]
+    },
+    "apple-mail": {
+      "command": "node",
+      "args": ["/absolute/path/to/mail/build/index.js"]
     }
   }
 }
@@ -300,6 +315,31 @@ An MCP server that interacts with Apple Maps using Maps URL schemes.
 - "Get walking directions from Central Park to the Met"
 - "Show me 1 Apple Park Way, Cupertino on a map"
 - "Drop a pin at 48.8584, 2.2945"
+
+---
+
+## Apple Mail
+
+An MCP server that interacts with Apple Mail via AppleScript.
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_mailboxes` | List all mailboxes across accounts with unread counts |
+| `list_messages` | List recent messages in a mailbox |
+| `get_message` | Get the full content of an email by ID |
+| `search_messages` | Search emails by subject across mailboxes |
+| `send_email` | Send an email with optional CC/BCC |
+| `get_unread_count` | Get unread count for a mailbox or all mailboxes |
+| `move_message` | Move an email to a different mailbox |
+
+### Usage Examples
+
+- "How many unread emails do I have?"
+- "Show my recent emails in INBOX"
+- "Search my email for invoices"
+- "Send an email to bob@example.com about the meeting"
 
 ---
 

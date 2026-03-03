@@ -29,6 +29,11 @@
       "type": "stdio",
       "command": "node",
       "args": ["/Users/garyriches/Documents/Source/MCP/Apple/maps/build/index.js"]
+    },
+    "apple-mail": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/mail/build/index.js"]
     }
   }
 }
