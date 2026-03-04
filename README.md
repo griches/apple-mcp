@@ -21,6 +21,51 @@ A collection of [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 
 - **Full Disk Access** granted to your terminal app (System Settings > Privacy & Security > Full Disk Access) — required for reading the Messages database
 - **The associated Apple app must be running** — each MCP server communicates with its corresponding app via AppleScript, so the app (e.g. Contacts, Mail, Notes) needs to be open for the server to function
 
+## Safety Modes
+
+All servers (except Apple Maps, which is UI-only) support two optional safety flags:
+
+| Mode | Flag | Behaviour |
+|------|------|-----------|
+| **Normal** (default) | _(none)_ | All tools available, no restrictions |
+| **Read-only** | `--read-only` | Destructive/write tools are not registered at all |
+| **Confirm** | `--confirm-destructive` | Destructive tools require a `confirm: true` parameter; without it they return a warning asking the AI to check with the user first |
+
+### Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "apple-notes": {
+      "command": "npx",
+      "args": ["@griches/apple-notes-mcp", "--read-only"]
+    },
+    "apple-messages": {
+      "command": "npx",
+      "args": ["@griches/apple-messages-mcp", "--confirm-destructive"]
+    }
+  }
+}
+```
+
+### Claude Code
+
+```bash
+claude mcp add apple-notes -- npx @griches/apple-notes-mcp --read-only
+claude mcp add apple-messages -- npx @griches/apple-messages-mcp --confirm-destructive
+```
+
+### Destructive tools by server
+
+| Server | Destructive tools |
+|--------|-------------------|
+| Notes | `create_folder`, `create_note`, `update_note`, `delete_note` |
+| Messages | `send_message` |
+| Contacts | `create_contact`, `delete_contact`, `create_group`, `add_contact_to_group` |
+| Reminders | `create_list`, `create_reminder`, `complete_reminder`, `delete_reminder` |
+| Calendar | `create_event`, `delete_event` |
+| Mail | `send_email`, `move_message` |
+
 ## Quick Start
 
 No cloning or building required — install and run directly with `npx`:

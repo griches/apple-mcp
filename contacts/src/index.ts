@@ -4,6 +4,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as applescript from "./applescript.js";
 
+const readOnly = process.argv.includes("--read-only");
+const confirmDestructive = process.argv.includes("--confirm-destructive");
+
 const server = new McpServer({
   name: "apple-contacts",
   version: "1.0.0",
@@ -83,94 +86,112 @@ server.registerTool(
   }
 );
 
-// ---- create_contact ----
-server.registerTool(
-  "create_contact",
-  {
-    description: "Create a new contact in Apple Contacts",
-    inputSchema: z.object({
-      first_name: z.string().describe("First name of the contact"),
-      last_name: z.string().describe("Last name of the contact"),
-      email: z.string().optional().describe("Email address"),
-      phone: z.string().optional().describe("Phone number"),
-      organization: z.string().optional().describe("Company or organization"),
-      job_title: z.string().optional().describe("Job title"),
-      note: z.string().optional().describe("Note about the contact"),
-    }),
-  },
-  async ({ first_name, last_name, email, phone, organization, job_title, note }) => {
-    try {
-      const result = await applescript.createContact(first_name, last_name, {
-        email,
-        phone,
-        organization,
-        jobTitle: job_title,
-        note,
-      });
-      return { content: [{ type: "text", text: result }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+if (!readOnly) {
+  // ---- create_contact ----
+  server.registerTool(
+    "create_contact",
+    {
+      description: "Create a new contact in Apple Contacts",
+      inputSchema: z.object({
+        first_name: z.string().describe("First name of the contact"),
+        last_name: z.string().describe("Last name of the contact"),
+        email: z.string().optional().describe("Email address"),
+        phone: z.string().optional().describe("Phone number"),
+        organization: z.string().optional().describe("Company or organization"),
+        job_title: z.string().optional().describe("Job title"),
+        note: z.string().optional().describe("Note about the contact"),
+        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
+      }),
+    },
+    async ({ first_name, last_name, email, phone, organization, job_title, note, confirm }: { first_name: string; last_name: string; email?: string; phone?: string; organization?: string; job_title?: string; note?: string; confirm?: unknown }) => {
+      if (confirmDestructive && !confirm) {
+        return { content: [{ type: "text", text: "This will create a new contact in Apple Contacts. Please confirm with the user, then call again with confirm: true." }] };
+      }
+      try {
+        const result = await applescript.createContact(first_name, last_name, {
+          email,
+          phone,
+          organization,
+          jobTitle: job_title,
+          note,
+        });
+        return { content: [{ type: "text", text: result }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+      }
     }
-  }
-);
+  );
 
-// ---- delete_contact ----
-server.registerTool(
-  "delete_contact",
-  {
-    description: "Delete a contact by name",
-    inputSchema: z.object({
-      name: z.string().describe("Full name of the contact to delete"),
-    }),
-  },
-  async ({ name }) => {
-    try {
-      const result = await applescript.deleteContact(name);
-      return { content: [{ type: "text", text: result }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+  // ---- delete_contact ----
+  server.registerTool(
+    "delete_contact",
+    {
+      description: "Delete a contact by name",
+      inputSchema: z.object({
+        name: z.string().describe("Full name of the contact to delete"),
+        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
+      }),
+    },
+    async ({ name, confirm }: { name: string; confirm?: unknown }) => {
+      if (confirmDestructive && !confirm) {
+        return { content: [{ type: "text", text: "This will permanently delete the contact. Please confirm with the user, then call again with confirm: true." }] };
+      }
+      try {
+        const result = await applescript.deleteContact(name);
+        return { content: [{ type: "text", text: result }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+      }
     }
-  }
-);
+  );
 
-// ---- create_group ----
-server.registerTool(
-  "create_group",
-  {
-    description: "Create a new group in Apple Contacts",
-    inputSchema: z.object({
-      name: z.string().describe("Name of the group to create"),
-    }),
-  },
-  async ({ name }) => {
-    try {
-      const result = await applescript.createGroup(name);
-      return { content: [{ type: "text", text: result }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+  // ---- create_group ----
+  server.registerTool(
+    "create_group",
+    {
+      description: "Create a new group in Apple Contacts",
+      inputSchema: z.object({
+        name: z.string().describe("Name of the group to create"),
+        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
+      }),
+    },
+    async ({ name, confirm }: { name: string; confirm?: unknown }) => {
+      if (confirmDestructive && !confirm) {
+        return { content: [{ type: "text", text: "This will create a new group in Apple Contacts. Please confirm with the user, then call again with confirm: true." }] };
+      }
+      try {
+        const result = await applescript.createGroup(name);
+        return { content: [{ type: "text", text: result }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+      }
     }
-  }
-);
+  );
 
-// ---- add_contact_to_group ----
-server.registerTool(
-  "add_contact_to_group",
-  {
-    description: "Add an existing contact to a group",
-    inputSchema: z.object({
-      contact_name: z.string().describe("Full name of the contact"),
-      group_name: z.string().describe("Name of the group to add the contact to"),
-    }),
-  },
-  async ({ contact_name, group_name }) => {
-    try {
-      const result = await applescript.addContactToGroup(contact_name, group_name);
-      return { content: [{ type: "text", text: result }] };
-    } catch (err) {
-      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+  // ---- add_contact_to_group ----
+  server.registerTool(
+    "add_contact_to_group",
+    {
+      description: "Add an existing contact to a group",
+      inputSchema: z.object({
+        contact_name: z.string().describe("Full name of the contact"),
+        group_name: z.string().describe("Name of the group to add the contact to"),
+        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
+      }),
+    },
+    async ({ contact_name, group_name, confirm }: { contact_name: string; group_name: string; confirm?: unknown }) => {
+      if (confirmDestructive && !confirm) {
+        return { content: [{ type: "text", text: "This will add the contact to the specified group. Please confirm with the user, then call again with confirm: true." }] };
+      }
+      try {
+        const result = await applescript.addContactToGroup(contact_name, group_name);
+        return { content: [{ type: "text", text: result }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+      }
     }
-  }
-);
+  );
+}
 
 // ---- Start server ----
 async function main() {
