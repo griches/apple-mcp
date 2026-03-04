@@ -61,6 +61,17 @@ end tell`;
   return runAppleScript(script);
 }
 
+export async function deleteFolder(name: string): Promise<string> {
+  const safeName = sanitize(name);
+  const script = `
+tell application "Notes"
+  set targetFolder to first folder whose name is "${safeName}"
+  delete targetFolder
+  return "Folder deleted: ${safeName}"
+end tell`;
+  return runAppleScript(script);
+}
+
 export async function listNotes(folder: string): Promise<{ title: string; id: string; creationDate: string; modificationDate: string }[]> {
   const safeFolder = sanitize(folder);
   const script = `

@@ -153,6 +153,29 @@ if (!readOnly) {
       }
     }
   );
+
+  // ---- delete_folder ----
+  server.registerTool(
+    "delete_folder",
+    {
+      description: "Delete a folder and all its notes from Apple Notes",
+      inputSchema: z.object({
+        name: z.string().describe("Name of the folder to delete"),
+        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
+      }),
+    },
+    async ({ name, confirm }: { name: string; confirm?: unknown }) => {
+      if (confirmDestructive && !confirm) {
+        return { content: [{ type: "text", text: "This will permanently delete the folder and all notes inside it. Please confirm with the user, then call again with confirm: true." }] };
+      }
+      try {
+        const result = await applescript.deleteFolder(name);
+        return { content: [{ type: "text", text: result }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+      }
+    }
+  );
 }
 
 // ---- search_notes ----

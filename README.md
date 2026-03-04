@@ -59,7 +59,7 @@ claude mcp add apple-messages -- npx @griches/apple-messages-mcp --confirm-destr
 
 | Server | Destructive tools |
 |--------|-------------------|
-| Notes | `delete_note` |
+| Notes | `delete_note`, `delete_folder` |
 | Contacts | `delete_contact` |
 | Reminders | `delete_reminder` |
 | Calendar | `delete_event` |
@@ -226,6 +226,7 @@ An MCP server that interacts with Apple Notes via AppleScript.
 | `create_note` | Create a new note (HTML body) in a folder |
 | `update_note` | Update the body of an existing note |
 | `delete_note` | Delete a note |
+| `delete_folder` | Delete a folder and all its notes |
 | `search_notes` | Search notes by keyword across folders |
 
 ### Usage Examples
