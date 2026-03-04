@@ -19,6 +19,7 @@ npx @griches/apple-notes-mcp
 | `create_note` | Create a new note (HTML body) in a folder |
 | `update_note` | Update the body of an existing note |
 | `delete_note` | Delete a note |
+| `delete_folder` | Delete a folder and all its notes |
 | `search_notes` | Search notes by keyword across folders |
 
 ## Configuration
