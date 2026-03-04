@@ -29,30 +29,24 @@ server.registerTool(
   }
 );
 
-if (!readOnly) {
-  // ---- create_folder ----
-  server.registerTool(
-    "create_folder",
-    {
-      description: "Create a new folder in Apple Notes",
-      inputSchema: z.object({
-        name: z.string().describe("Name of the folder to create"),
-        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
-      }),
-    },
-    async ({ name, confirm }: { name: string; confirm?: unknown }) => {
-      if (confirmDestructive && !confirm) {
-        return { content: [{ type: "text", text: "This will create a new folder in Apple Notes. Please confirm with the user, then call again with confirm: true." }] };
-      }
-      try {
-        const result = await applescript.createFolder(name);
-        return { content: [{ type: "text", text: result }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
-      }
+// ---- create_folder ----
+server.registerTool(
+  "create_folder",
+  {
+    description: "Create a new folder in Apple Notes",
+    inputSchema: z.object({
+      name: z.string().describe("Name of the folder to create"),
+    }),
+  },
+  async ({ name }) => {
+    try {
+      const result = await applescript.createFolder(name);
+      return { content: [{ type: "text", text: result }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
     }
-  );
-}
+  }
+);
 
 // ---- list_notes ----
 server.registerTool(
@@ -93,57 +87,49 @@ server.registerTool(
   }
 );
 
+// ---- create_note ----
+server.registerTool(
+  "create_note",
+  {
+    description: "Create a new note in a specified Apple Notes folder",
+    inputSchema: z.object({
+      title: z.string().describe("Title of the new note"),
+      body: z.string().describe("HTML body content of the note"),
+      folder: z.string().describe("Folder to create the note in"),
+    }),
+  },
+  async ({ title, body, folder }) => {
+    try {
+      const result = await applescript.createNote(title, body, folder);
+      return { content: [{ type: "text", text: result }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  }
+);
+
+// ---- update_note ----
+server.registerTool(
+  "update_note",
+  {
+    description: "Update the body of an existing note",
+    inputSchema: z.object({
+      title: z.string().describe("Title of the note to update"),
+      body: z.string().describe("New HTML body content for the note"),
+      folder: z.string().optional().describe("Folder the note is in (searches all folders if omitted)"),
+    }),
+  },
+  async ({ title, body, folder }) => {
+    try {
+      const result = await applescript.updateNote(title, body, folder);
+      return { content: [{ type: "text", text: result }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  }
+);
+
 if (!readOnly) {
-  // ---- create_note ----
-  server.registerTool(
-    "create_note",
-    {
-      description: "Create a new note in a specified Apple Notes folder",
-      inputSchema: z.object({
-        title: z.string().describe("Title of the new note"),
-        body: z.string().describe("HTML body content of the note"),
-        folder: z.string().describe("Folder to create the note in"),
-        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
-      }),
-    },
-    async ({ title, body, folder, confirm }: { title: string; body: string; folder: string; confirm?: unknown }) => {
-      if (confirmDestructive && !confirm) {
-        return { content: [{ type: "text", text: "This will create a new note in Apple Notes. Please confirm with the user, then call again with confirm: true." }] };
-      }
-      try {
-        const result = await applescript.createNote(title, body, folder);
-        return { content: [{ type: "text", text: result }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
-      }
-    }
-  );
-
-  // ---- update_note ----
-  server.registerTool(
-    "update_note",
-    {
-      description: "Update the body of an existing note",
-      inputSchema: z.object({
-        title: z.string().describe("Title of the note to update"),
-        body: z.string().describe("New HTML body content for the note"),
-        folder: z.string().optional().describe("Folder the note is in (searches all folders if omitted)"),
-        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
-      }),
-    },
-    async ({ title, body, folder, confirm }: { title: string; body: string; folder?: string; confirm?: unknown }) => {
-      if (confirmDestructive && !confirm) {
-        return { content: [{ type: "text", text: "This will overwrite the body of an existing note. Please confirm with the user, then call again with confirm: true." }] };
-      }
-      try {
-        const result = await applescript.updateNote(title, body, folder);
-        return { content: [{ type: "text", text: result }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
-      }
-    }
-  );
-
   // ---- delete_note ----
   server.registerTool(
     "delete_note",

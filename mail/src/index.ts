@@ -4,9 +4,6 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as applescript from "./applescript.js";
 
-const readOnly = process.argv.includes("--read-only");
-const confirmDestructive = process.argv.includes("--confirm-destructive");
-
 const server = new McpServer({
   name: "apple-mail",
   version: "1.0.0",
@@ -93,66 +90,33 @@ server.registerTool(
   }
 );
 
-if (!readOnly) {
-  // ---- send_email ----
-  server.registerTool(
-    "send_email",
-    {
-      description: "Send an email via Apple Mail",
-      inputSchema: z.object({
-        to: z.string().describe("Recipient email address"),
-        subject: z.string().describe("Email subject"),
-        body: z.string().describe("Email body text"),
-        cc: z.string().optional().describe("CC recipient email address"),
-        bcc: z.string().optional().describe("BCC recipient email address"),
-        from_account: z.string().optional().describe("Account to send from (uses default if omitted)"),
-        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
-      }),
-    },
-    async ({ to, subject, body, cc, bcc, from_account, confirm }: { to: string; subject: string; body: string; cc?: string; bcc?: string; from_account?: string; confirm?: unknown }) => {
-      if (confirmDestructive && !confirm) {
-        return { content: [{ type: "text", text: "This will send an email to the recipient. Please confirm with the user, then call again with confirm: true." }] };
-      }
-      try {
-        const result = await applescript.sendEmail(to, subject, body, {
-          cc,
-          bcc,
-          from: from_account,
-        });
-        return { content: [{ type: "text", text: result }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
-      }
+// ---- send_email ----
+server.registerTool(
+  "send_email",
+  {
+    description: "Send an email via Apple Mail",
+    inputSchema: z.object({
+      to: z.string().describe("Recipient email address"),
+      subject: z.string().describe("Email subject"),
+      body: z.string().describe("Email body text"),
+      cc: z.string().optional().describe("CC recipient email address"),
+      bcc: z.string().optional().describe("BCC recipient email address"),
+      from_account: z.string().optional().describe("Account to send from (uses default if omitted)"),
+    }),
+  },
+  async ({ to, subject, body, cc, bcc, from_account }) => {
+    try {
+      const result = await applescript.sendEmail(to, subject, body, {
+        cc,
+        bcc,
+        from: from_account,
+      });
+      return { content: [{ type: "text", text: result }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
     }
-  );
-
-  // ---- move_message ----
-  server.registerTool(
-    "move_message",
-    {
-      description: "Move an email message to a different mailbox",
-      inputSchema: z.object({
-        message_id: z.number().describe("ID of the message to move"),
-        from_mailbox: z.string().describe("Source mailbox name"),
-        from_account: z.string().describe("Source account name"),
-        to_mailbox: z.string().describe("Destination mailbox name"),
-        to_account: z.string().optional().describe("Destination account (same as source if omitted)"),
-        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
-      }),
-    },
-    async ({ message_id, from_mailbox, from_account, to_mailbox, to_account, confirm }: { message_id: number; from_mailbox: string; from_account: string; to_mailbox: string; to_account?: string; confirm?: unknown }) => {
-      if (confirmDestructive && !confirm) {
-        return { content: [{ type: "text", text: "This will move the email to a different mailbox. Please confirm with the user, then call again with confirm: true." }] };
-      }
-      try {
-        const result = await applescript.moveMessage(message_id, from_mailbox, from_account, to_mailbox, to_account);
-        return { content: [{ type: "text", text: result }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
-      }
-    }
-  );
-}
+  }
+);
 
 // ---- get_unread_count ----
 server.registerTool(
@@ -168,6 +132,29 @@ server.registerTool(
     try {
       const count = await applescript.getUnreadCount(mailbox, account);
       return { content: [{ type: "text", text: JSON.stringify({ unread_count: count }, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  }
+);
+
+// ---- move_message ----
+server.registerTool(
+  "move_message",
+  {
+    description: "Move an email message to a different mailbox",
+    inputSchema: z.object({
+      message_id: z.number().describe("ID of the message to move"),
+      from_mailbox: z.string().describe("Source mailbox name"),
+      from_account: z.string().describe("Source account name"),
+      to_mailbox: z.string().describe("Destination mailbox name"),
+      to_account: z.string().optional().describe("Destination account (same as source if omitted)"),
+    }),
+  },
+  async ({ message_id, from_mailbox, from_account, to_mailbox, to_account }) => {
+    try {
+      const result = await applescript.moveMessage(message_id, from_mailbox, from_account, to_mailbox, to_account);
+      return { content: [{ type: "text", text: result }] };
     } catch (err) {
       return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
     }

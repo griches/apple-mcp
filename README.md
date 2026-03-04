@@ -59,12 +59,10 @@ claude mcp add apple-messages -- npx @griches/apple-messages-mcp --confirm-destr
 
 | Server | Destructive tools |
 |--------|-------------------|
-| Notes | `create_folder`, `create_note`, `update_note`, `delete_note` |
-| Messages | `send_message` |
-| Contacts | `create_contact`, `delete_contact`, `create_group`, `add_contact_to_group` |
-| Reminders | `create_list`, `create_reminder`, `complete_reminder`, `delete_reminder` |
-| Calendar | `create_event`, `delete_event` |
-| Mail | `send_email`, `move_message` |
+| Notes | `delete_note` |
+| Contacts | `delete_contact` |
+| Reminders | `delete_reminder` |
+| Calendar | `delete_event` |
 
 ## Quick Start
 

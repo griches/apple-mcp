@@ -91,40 +91,36 @@ server.registerTool(
   }
 );
 
-if (!readOnly) {
-  // ---- create_event ----
-  server.registerTool(
-    "create_event",
-    {
-      description: "Create a new event in a calendar",
-      inputSchema: z.object({
-        calendar: z.string().describe("Name of the calendar to add the event to"),
-        summary: z.string().describe("Title/summary of the event"),
-        start_date: z.string().describe("Start date and time (e.g. '15 March 2025 at 2:00 PM')"),
-        end_date: z.string().describe("End date and time (e.g. '15 March 2025 at 3:00 PM')"),
-        location: z.string().optional().describe("Location of the event"),
-        description: z.string().optional().describe("Description or notes for the event"),
-        all_day: z.boolean().optional().describe("Whether this is an all-day event"),
-        ...(confirmDestructive ? { confirm: z.boolean().optional().describe("Set to true to confirm this destructive action") } : {}),
-      }),
-    },
-    async ({ calendar, summary, start_date, end_date, location, description, all_day, confirm }: { calendar: string; summary: string; start_date: string; end_date: string; location?: string; description?: string; all_day?: boolean; confirm?: unknown }) => {
-      if (confirmDestructive && !confirm) {
-        return { content: [{ type: "text", text: "This will create a new event in your calendar. Please confirm with the user, then call again with confirm: true." }] };
-      }
-      try {
-        const result = await applescript.createEvent(calendar, summary, start_date, end_date, {
-          location,
-          description,
-          allDay: all_day,
-        });
-        return { content: [{ type: "text", text: result }] };
-      } catch (err) {
-        return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
-      }
+// ---- create_event ----
+server.registerTool(
+  "create_event",
+  {
+    description: "Create a new event in a calendar",
+    inputSchema: z.object({
+      calendar: z.string().describe("Name of the calendar to add the event to"),
+      summary: z.string().describe("Title/summary of the event"),
+      start_date: z.string().describe("Start date and time (e.g. '15 March 2025 at 2:00 PM')"),
+      end_date: z.string().describe("End date and time (e.g. '15 March 2025 at 3:00 PM')"),
+      location: z.string().optional().describe("Location of the event"),
+      description: z.string().optional().describe("Description or notes for the event"),
+      all_day: z.boolean().optional().describe("Whether this is an all-day event"),
+    }),
+  },
+  async ({ calendar, summary, start_date, end_date, location, description, all_day }) => {
+    try {
+      const result = await applescript.createEvent(calendar, summary, start_date, end_date, {
+        location,
+        description,
+        allDay: all_day,
+      });
+      return { content: [{ type: "text", text: result }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
     }
-  );
+  }
+);
 
+if (!readOnly) {
   // ---- delete_event ----
   server.registerTool(
     "delete_event",
