@@ -25,6 +25,51 @@ export function runAppleScript(script: string, timeout = 120000): Promise<string
   });
 }
 
+/**
+ * Parse a date string into components, handling various formats:
+ * "March 9, 2026", "9 March 2026", "Monday, 9 March 2026",
+ * "2026-03-09", "March 15, 2025 at 2:00 PM", etc.
+ * Returns locale-independent AppleScript to build the date from components.
+ */
+export function dateToAppleScript(input: string, varName: string): string {
+  // Strip day names like "Monday, " or "Friday, "
+  const cleaned = input.replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*/i, "");
+
+  // Extract time if present (e.g. "at 2:00 PM" or "at 14:00")
+  let hours = 0, minutes = 0;
+  const timeMatch = cleaned.match(/\bat\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (timeMatch) {
+    hours = parseInt(timeMatch[1]);
+    minutes = parseInt(timeMatch[2]);
+    if (timeMatch[3]?.toUpperCase() === "PM" && hours < 12) hours += 12;
+    if (timeMatch[3]?.toUpperCase() === "AM" && hours === 12) hours = 0;
+  }
+
+  // Remove the time portion for date parsing
+  const dateOnly = cleaned.replace(/\s*\bat\s+\d{1,2}:\d{2}\s*(AM|PM)?/i, "").trim();
+
+  // Try to parse with Date constructor
+  const parsed = new Date(dateOnly);
+  if (isNaN(parsed.getTime())) {
+    throw new Error(`Invalid date: "${input}"`);
+  }
+
+  const year = parsed.getFullYear();
+  const month = parsed.getMonth() + 1; // 1-indexed
+  const day = parsed.getDate();
+
+  const months = ["January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+
+  return `set ${varName} to current date
+set year of ${varName} to ${year}
+set month of ${varName} to ${months[month - 1]}
+set day of ${varName} to ${day}
+set hours of ${varName} to ${hours}
+set minutes of ${varName} to ${minutes}
+set seconds of ${varName} to 0`;
+}
+
 const FIELD_DELIM = "|||";
 const RECORD_DELIM = "<<<>>>";
 
@@ -160,8 +205,8 @@ export async function createReminder(
 
   let dateSetup = "";
   if (options?.dueDate) {
-    const safeDate = sanitize(options.dueDate);
-    dateSetup = `\n  set due date of newReminder to date "${safeDate}"`;
+    const dateScript = dateToAppleScript(options.dueDate, "dueD");
+    dateSetup = `\n  ${dateScript}\n  set due date of newReminder to dueD`;
   }
 
   const script = `
@@ -215,8 +260,8 @@ export async function updateReminder(
 
   let dateSetup = "";
   if (updates.dueDate) {
-    const safeDate = sanitize(updates.dueDate);
-    dateSetup = `\n  set due date of r to date "${safeDate}"`;
+    const dateScript = dateToAppleScript(updates.dueDate, "dueD");
+    dateSetup = `\n  ${dateScript}\n  set due date of r to dueD`;
   }
 
   const script = `
