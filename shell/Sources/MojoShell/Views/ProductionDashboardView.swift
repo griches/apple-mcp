@@ -31,7 +31,7 @@ struct ProductionDashboardView: View {
             errorMessage: nil
         ),
     ]
-    @State private var workflowLog = "Run the stub assembly workflow to exercise the computer-use seam."
+    @State private var workflowLog = "Configure MOJOSHELL_ASSEMBLY_CLICK_TARGET=x,y to run a real assembly action."
     @State private var isRunningWorkflow = false
 
     var body: some View {
@@ -51,9 +51,9 @@ struct ProductionDashboardView: View {
                 Label("FCP / Motion", systemImage: "film.stack")
                     .font(.headline)
                 Divider()
-                Text("Computer-use provider: Stub")
+                Text("Computer-use provider: \(appState.computerUseProviderName)")
                     .foregroundStyle(.secondary)
-                Text("Real FCP control is deferred to a future computer-use integration.")
+                Text("Phase 1 uses coordinate-driven computer use. Configure the assembly click target before running a live action.")
                     .foregroundStyle(.secondary)
                     .font(.callout)
                 Divider()
@@ -63,7 +63,7 @@ struct ProductionDashboardView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Spacer()
-                Button(isRunningWorkflow ? "Running..." : "Run Assembly Workflow (Stub)") {
+                Button(isRunningWorkflow ? "Running..." : "Run Assembly Workflow") {
                     Task {
                         await runAssemblyWorkflow()
                     }

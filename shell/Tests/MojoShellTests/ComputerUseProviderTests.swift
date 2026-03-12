@@ -74,4 +74,35 @@ final class ComputerUseProviderTests: XCTestCase {
             // expected
         }
     }
+
+    func testCuaCaptureStateRequiresScreenRecordingPermission() async throws {
+        let provider = CuaComputerUseProvider(
+            permissionStatusProvider: { CuaPermissionStatus(accessibilityTrusted: true, screenRecordingGranted: false) }
+        )
+        let id = try await provider.startSession()
+
+        do {
+            _ = try await provider.captureState(sessionId: id)
+            XCTFail("Expected CuaError.screenRecordingPermissionDenied")
+        } catch CuaError.screenRecordingPermissionDenied {
+            // expected
+        }
+    }
+
+    func testCuaExecuteRequiresAccessibilityPermission() async throws {
+        let provider = CuaComputerUseProvider(
+            permissionStatusProvider: { CuaPermissionStatus(accessibilityTrusted: false, screenRecordingGranted: true) }
+        )
+        let id = try await provider.startSession()
+
+        do {
+            _ = try await provider.execute(
+                sessionId: id,
+                action: ComputerUseAction(type: .click, target: "640,400")
+            )
+            XCTFail("Expected CuaError.accessibilityPermissionDenied")
+        } catch CuaError.accessibilityPermissionDenied {
+            // expected
+        }
+    }
 }

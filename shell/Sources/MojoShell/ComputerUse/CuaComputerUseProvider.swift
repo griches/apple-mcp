@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import CoreGraphics
 import Foundation
 
@@ -15,6 +16,11 @@ actor CuaComputerUseProvider: ComputerUseProvider {
     let name = "cua"
 
     private var sessions: Set<String> = []
+    private let permissionStatusProvider: @Sendable () -> CuaPermissionStatus
+
+    init(permissionStatusProvider: @escaping @Sendable () -> CuaPermissionStatus = { .live }) {
+        self.permissionStatusProvider = permissionStatusProvider
+    }
 
     // MARK: - Protocol
 
@@ -26,6 +32,10 @@ actor CuaComputerUseProvider: ComputerUseProvider {
 
     func captureState(sessionId: String) async throws -> ComputerUseState {
         try requireSession(sessionId)
+        let permissions = permissionStatusProvider()
+        guard permissions.screenRecordingGranted else {
+            throw CuaError.screenRecordingPermissionDenied
+        }
 
         let appName = await MainActor.run {
             NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
@@ -40,6 +50,10 @@ actor CuaComputerUseProvider: ComputerUseProvider {
 
     func execute(sessionId: String, action: ComputerUseAction) async throws -> ComputerUseResult {
         try requireSession(sessionId)
+        let permissions = permissionStatusProvider()
+        guard permissions.accessibilityTrusted else {
+            throw CuaError.accessibilityPermissionDenied
+        }
 
         switch action.type {
         case .click:
@@ -54,10 +68,12 @@ actor CuaComputerUseProvider: ComputerUseProvider {
             try performDrag(from: action.target, to: action.value)
         }
 
+        let screenshotAfter = permissions.screenRecordingGranted ? captureScreenshot() : nil
+        let screenshotSuffix = screenshotAfter == nil ? " (screenshot unavailable)" : ""
         return ComputerUseResult(
             success: true,
-            message: "executed \(action.type.rawValue) → \(action.target)",
-            screenshotAfter: captureScreenshot()
+            message: "executed \(action.type.rawValue) → \(action.target)\(screenshotSuffix)",
+            screenshotAfter: screenshotAfter
         )
     }
 
@@ -228,11 +244,25 @@ actor CuaComputerUseProvider: ComputerUseProvider {
     // swiftlint:enable cyclomatic_complexity
 }
 
+struct CuaPermissionStatus: Equatable {
+    let accessibilityTrusted: Bool
+    let screenRecordingGranted: Bool
+
+    static var live: CuaPermissionStatus {
+        CuaPermissionStatus(
+            accessibilityTrusted: AXIsProcessTrusted(),
+            screenRecordingGranted: CGPreflightScreenCaptureAccess()
+        )
+    }
+}
+
 enum CuaError: LocalizedError {
     case unknownSession
     case eventCreationFailed
     case invalidCoordinates(String)
     case unknownKey(String)
+    case accessibilityPermissionDenied
+    case screenRecordingPermissionDenied
 
     var errorDescription: String? {
         switch self {
@@ -244,6 +274,10 @@ enum CuaError: LocalizedError {
             return "Invalid coordinates '\(s)'. Expected 'x,y' (e.g. '640,400')."
         case .unknownKey(let k):
             return "Unknown key '\(k)'. Use names like 'return', 'esc', 'cmd+e', 'shift+tab'."
+        case .accessibilityPermissionDenied:
+            return "Accessibility permission is required for computer-use input injection."
+        case .screenRecordingPermissionDenied:
+            return "Screen Recording permission is required for computer-use screenshots."
         }
     }
 }

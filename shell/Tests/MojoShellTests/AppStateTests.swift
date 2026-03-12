@@ -10,7 +10,8 @@ final class AppStateTests: XCTestCase {
         let appState = AppState(
             daemons: daemonManager,
             executor: executor,
-            computerUseProvider: provider
+            computerUseProvider: provider,
+            assemblyClickTarget: "640,400"
         )
 
         let result = await appState.runAssemblyWorkflow(jobName: "Demo Job")
@@ -19,9 +20,53 @@ final class AppStateTests: XCTestCase {
         case .success(let output):
             XCTAssertTrue(output.contains("Demo Job"))
             XCTAssertTrue(output.contains("fake-cu"))
+            XCTAssertTrue(output.contains("640,400"))
             XCTAssertTrue(output.contains("executed"))
         case .failure(let error):
             XCTFail("Expected success, got \(error)")
+        }
+    }
+
+    func testRunAssemblyWorkflowFailsWhenClickTargetIsMissing() async {
+        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
+        let executor = MCPToolExecutor(daemonManager: daemonManager)
+        let appState = AppState(
+            daemons: daemonManager,
+            executor: executor,
+            computerUseProvider: FakeComputerUseProvider(),
+            assemblyClickTarget: nil
+        )
+
+        let result = await appState.runAssemblyWorkflow(jobName: "Demo Job")
+
+        switch result {
+        case .success(let output):
+            XCTFail("Expected missing target failure, got \(output)")
+        case .failure(let error as AssemblyWorkflowError):
+            XCTAssertEqual(error, .missingClickTarget)
+        case .failure(let error):
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testRunAssemblyWorkflowStopsSessionAfterFailure() async {
+        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
+        let executor = MCPToolExecutor(daemonManager: daemonManager)
+        let provider = RecordingFailingComputerUseProvider()
+        let appState = AppState(
+            daemons: daemonManager,
+            executor: executor,
+            computerUseProvider: provider,
+            assemblyClickTarget: "640,400"
+        )
+
+        let result = await appState.runAssemblyWorkflow(jobName: "Demo Job")
+
+        switch result {
+        case .success(let output):
+            XCTFail("Expected failure, got \(output)")
+        case .failure:
+            XCTAssertTrue(await provider.didStopSession)
         }
     }
 
@@ -68,6 +113,28 @@ actor FakeComputerUseProvider: ComputerUseProvider {
     func stopSession(sessionId _: String) async throws {}
 }
 
+actor RecordingFailingComputerUseProvider: ComputerUseProvider {
+    let name = "recording-cu"
+
+    private(set) var didStopSession = false
+
+    func startSession() async throws -> String {
+        "recording-session"
+    }
+
+    func captureState(sessionId _: String) async throws -> ComputerUseState {
+        ComputerUseState(appName: "recording-cu", screenshotData: nil, timestamp: Date())
+    }
+
+    func execute(sessionId _: String, action _: ComputerUseAction) async throws -> ComputerUseResult {
+        throw TestComputerUseError.executionFailed
+    }
+
+    func stopSession(sessionId _: String) async throws {
+        didStopSession = true
+    }
+}
+
 struct FailingLLMProvider: LLMProvider {
     let name: String
 
@@ -100,6 +167,17 @@ enum TestLLMError: LocalizedError {
         switch self {
         case .failed(let name):
             return "\(name) failed"
+        }
+    }
+}
+
+enum TestComputerUseError: LocalizedError {
+    case executionFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .executionFailed:
+            return "execution failed"
         }
     }
 }
