@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// A single step in a computer-use workflow.
@@ -17,6 +18,10 @@ struct WorkflowStep: Identifiable, Sendable {
     /// Text to type into the focused element.
     let typeText: String?
 
+    /// App to bring to the foreground via NSWorkspace (deterministic; ignores the app-switcher order).
+    /// When set, all other action fields are ignored.
+    let appActivationName: String?
+
     /// Delay in seconds AFTER this step executes.
     let delayAfter: TimeInterval
 
@@ -27,6 +32,23 @@ struct WorkflowStep: Identifiable, Sendable {
     }
 
     // Convenience initialisers
+
+    /// Activates a running app by its localised name using NSWorkspace.
+    /// Does NOT use cmd+tab — directly addresses the target process.
+    static func activateApp(
+        _ appName: String,
+        delay: TimeInterval = 0.5
+    ) -> WorkflowStep {
+        WorkflowStep(
+            description: "Activate \(appName)",
+            axQuery: nil,
+            fallbackCoordinates: nil,
+            keypress: nil,
+            typeText: nil,
+            appActivationName: appName,
+            delayAfter: delay
+        )
+    }
 
     static func click(
         _ description: String,
@@ -41,6 +63,7 @@ struct WorkflowStep: Identifiable, Sendable {
             fallbackCoordinates: fallback,
             keypress: nil,
             typeText: nil,
+            appActivationName: nil,
             delayAfter: delay
         )
     }
@@ -56,6 +79,7 @@ struct WorkflowStep: Identifiable, Sendable {
             fallbackCoordinates: nil,
             keypress: key,
             typeText: nil,
+            appActivationName: nil,
             delayAfter: delay
         )
     }
@@ -71,6 +95,7 @@ struct WorkflowStep: Identifiable, Sendable {
             fallbackCoordinates: nil,
             keypress: nil,
             typeText: text,
+            appActivationName: nil,
             delayAfter: delay
         )
     }
@@ -86,6 +111,7 @@ struct WorkflowStep: Identifiable, Sendable {
             fallbackCoordinates: xy,
             keypress: nil,
             typeText: nil,
+            appActivationName: nil,
             delayAfter: delay
         )
     }
@@ -100,8 +126,8 @@ enum FcpWorkflowDefinition {
     /// The specific share destination (Master File, YouTube, etc.) is wired per client template.
     static func assemblyWorkflow(shareDestination: String = "Master File…") -> [WorkflowStep] {
         [
-            // 1. Bring FCP to front so input events land on the right app
-            .keypress("Focus Final Cut Pro", key: "cmd+tab", delay: 0.5),
+            // 1. Bring FCP to front deterministically via NSWorkspace (not cmd+tab)
+            .activateApp("Final Cut Pro"),
 
             // 2. Open the Share sheet via menu shortcut (Cmd+E = Share → Master File by default)
             .keypress("Open Share menu (Cmd+E)", key: "cmd+e", delay: 1.0),
@@ -128,7 +154,7 @@ enum FcpWorkflowDefinition {
     /// Monitoring check: read the current background task list via Cmd+9 (Background Tasks window).
     static func monitoringCheck() -> [WorkflowStep] {
         [
-            .keypress("Focus Final Cut Pro", key: "cmd+tab", delay: 0.5),
+            .activateApp("Final Cut Pro"),
             .keypress("Open Background Tasks window (Cmd+9)", key: "cmd+9", delay: 0.8),
         ]
     }
@@ -146,7 +172,17 @@ struct WorkflowExecutor {
         for (index, step) in steps.enumerated() {
             onProgress("[\(index + 1)/\(steps.count)] \(step.description)…")
 
-            if let keypress = step.keypress {
+            if let appName = step.appActivationName {
+                let activated = await MainActor.run {
+                    NSWorkspace.shared.runningApplications
+                        .first { $0.localizedName == appName }?
+                        .activate(options: .activateIgnoringOtherApps)
+                        ?? false
+                }
+                if !activated {
+                    throw WorkflowError.appNotRunning(appName)
+                }
+            } else if let keypress = step.keypress {
                 _ = try await provider.execute(
                     sessionId: sessionId,
                     action: ComputerUseAction(type: .keypress, target: keypress)
@@ -196,11 +232,14 @@ struct WorkflowExecutor {
 
 enum WorkflowError: LocalizedError {
     case elementNotFound(String, String, String)
+    case appNotRunning(String)
 
     var errorDescription: String? {
         switch self {
         case .elementNotFound(let app, let role, let title):
             return "Could not find '\(title)' (\(role)) in \(app). Is the app open?"
+        case .appNotRunning(let name):
+            return "\(name) is not running. Open it before starting the workflow."
         }
     }
 }

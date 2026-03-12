@@ -129,23 +129,27 @@ struct ProductionDashboardView: View {
         jobs[queuedIndex].progress = 0.15
         workflowLog = "Starting assembly workflow…"
 
+        var sessionId: String?
         do {
-            let sessionId = try await appState.computerUseProvider.startSession()
+            sessionId = try await appState.computerUseProvider.startSession()
             let steps = FcpWorkflowDefinition.assemblyWorkflow()
             let executor = WorkflowExecutor(provider: appState.computerUseProvider)
 
-            try await executor.run(steps: steps, sessionId: sessionId) { [self] message in
-                // @MainActor not automatically captured in closure — update on main
+            try await executor.run(steps: steps, sessionId: sessionId!) { [self] message in
                 Task { @MainActor in
                     workflowLog = message
                 }
             }
 
-            try await appState.computerUseProvider.stopSession(sessionId: sessionId)
+            try await appState.computerUseProvider.stopSession(sessionId: sessionId!)
+            sessionId = nil
             jobs[queuedIndex].status = .completed
             jobs[queuedIndex].progress = 1.0
             jobs[queuedIndex].completedAt = Date()
         } catch {
+            if let id = sessionId {
+                try? await appState.computerUseProvider.stopSession(sessionId: id)
+            }
             jobs[queuedIndex].status = .failed
             jobs[queuedIndex].errorMessage = error.localizedDescription
             workflowLog = "Error: \(error.localizedDescription)"

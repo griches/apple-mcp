@@ -36,11 +36,25 @@ final class FcpWorkflowTests: XCTestCase {
 
     // MARK: - FcpWorkflowDefinition
 
+    func testActivateAppStepHasAppActivationName() {
+        let step = WorkflowStep.activateApp("Final Cut Pro")
+        XCTAssertEqual(step.appActivationName, "Final Cut Pro")
+        XCTAssertNil(step.keypress)
+        XCTAssertNil(step.axQuery)
+        XCTAssertNil(step.typeText)
+    }
+
     func testAssemblyWorkflowHasSteps() {
         let steps = FcpWorkflowDefinition.assemblyWorkflow()
         XCTAssertFalse(steps.isEmpty)
-        // First step focuses FCP
-        XCTAssertEqual(steps.first?.keypress, "cmd+tab")
+        // First step activates FCP deterministically — not cmd+tab
+        XCTAssertEqual(steps.first?.appActivationName, "Final Cut Pro")
+        XCTAssertNil(steps.first?.keypress)
+    }
+
+    func testMonitoringCheckFirstStepActivatesFCP() {
+        let steps = FcpWorkflowDefinition.monitoringCheck()
+        XCTAssertEqual(steps.first?.appActivationName, "Final Cut Pro")
     }
 
     func testMonitoringCheckHasSteps() {
@@ -51,6 +65,21 @@ final class FcpWorkflowTests: XCTestCase {
     }
 
     // MARK: - WorkflowExecutor with stub provider
+
+    func testExecutorThrowsAppNotRunningWhenActivationFails() async throws {
+        let stub = CapturingComputerUseProvider()
+        // Use a deliberately fake app name that will never be running
+        let steps = [WorkflowStep.activateApp("__NonExistentApp__")]
+        let sessionId = try await stub.startSession()
+        let executor = WorkflowExecutor(provider: stub)
+
+        do {
+            try await executor.run(steps: steps, sessionId: sessionId) { _ in }
+            XCTFail("Expected WorkflowError.appNotRunning")
+        } catch WorkflowError.appNotRunning(let name) {
+            XCTAssertEqual(name, "__NonExistentApp__")
+        }
+    }
 
     func testExecutorRunsAllKeyPressSteps() async throws {
         let stub = CapturingComputerUseProvider()
