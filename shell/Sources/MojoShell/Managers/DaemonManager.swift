@@ -55,6 +55,19 @@ final class DaemonManager: ObservableObject {
         runningServers[serverName]
     }
 
+    func ensureProcess(for serverName: String) -> Process? {
+        if let existing = runningServers[serverName], existing.isRunning {
+            return existing
+        }
+
+        guard let definition = serverDefinitions.first(where: { $0.name == serverName }) else {
+            return nil
+        }
+
+        start(definition)
+        return runningServers[serverName]
+    }
+
     private func start(_ definition: MCPServerDefinition) {
         guard runningServers[definition.name] == nil else {
             return

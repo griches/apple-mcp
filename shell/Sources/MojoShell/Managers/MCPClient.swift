@@ -57,7 +57,7 @@ actor MCPClient {
         self.stdoutHandle = stdout.fileHandleForReading
     }
 
-    func call(method: String, params: [String: AnyCodable] = [:]) throws -> MCPResponse {
+    func call(method: String, params: [String: AnyCodable] = [:]) async throws -> MCPResponse {
         let request = MCPRequest(id: nextID, method: method, params: params)
         nextID += 1
 
@@ -69,8 +69,8 @@ actor MCPClient {
         return try readResponse()
     }
 
-    func callTool(name: String, arguments: [String: AnyCodable] = [:]) throws -> MCPResponse {
-        try call(
+    func callTool(name: String, arguments: [String: AnyCodable] = [:]) async throws -> MCPResponse {
+        try await call(
             method: "tools/call",
             params: [
                 "name": .string(name),
@@ -102,6 +102,15 @@ actor MCPClient {
         }
 
         throw MCPClientError.decodingFailed(output)
+    }
+}
+
+extension MCPResponse {
+    var primaryTextContent: String? {
+        result?.content?
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

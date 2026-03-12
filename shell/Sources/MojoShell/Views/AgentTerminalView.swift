@@ -14,6 +14,7 @@ struct TerminalEntry: Identifiable, Equatable {
 }
 
 struct AgentTerminalView: View {
+    @EnvironmentObject private var appState: AppState
     @State private var input = ""
     @State private var history: [TerminalEntry] = [
         TerminalEntry(role: .system, text: "MojoShell Agent Terminal ready. Type a command.")
@@ -80,7 +81,13 @@ struct AgentTerminalView: View {
 
         if let tool = deterministicRouter.route(command) {
             history.append(TerminalEntry(role: .system, text: "→ deterministic route: \(tool.server)/\(tool.tool)"))
-            history.append(TerminalEntry(role: .agent, text: "Routed to \(tool.tool) on \(tool.server). MCP execution is not wired into the terminal yet."))
+            let result = await appState.execute(tool)
+            switch result {
+            case .success(let output):
+                history.append(TerminalEntry(role: .agent, text: output.text))
+            case .failure(let error):
+                history.append(TerminalEntry(role: .agent, text: "Error: \(error.localizedDescription)"))
+            }
         } else {
             history.append(TerminalEntry(role: .system, text: "→ escalating to Claude..."))
             history.append(TerminalEntry(role: .agent, text: "LLM routing is not yet wired. Set ANTHROPIC_API_KEY and connect ClaudeProvider in the next integration slice."))

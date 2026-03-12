@@ -57,8 +57,15 @@ struct CockpitView: View {
     private func scanInboxes() async {
         isScanning = true
         scanResult = "Scanning..."
-        try? await Task.sleep(nanoseconds: 800_000_000)
-        scanResult = "Scan complete — wire MCPClient to mail-intelligence/scan_persona_inboxes in the next integration slice."
+
+        let result = await appState.scanInboxes()
+        switch result {
+        case .success(let output):
+            scanResult = output.text
+        case .failure(let error):
+            scanResult = "Error: \(error.localizedDescription)"
+        }
+
         isScanning = false
     }
 }
