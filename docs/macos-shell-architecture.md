@@ -219,9 +219,36 @@ Commercial hardening:
 5. Add the three core views: cockpit, agent terminal, and production dashboard.
 6. Add structured job logging for media tasks.
 
-## Open Questions
+## Resolved Decisions
 
-- Which model/runtime will drive the shell’s agent router by default?
-- Should the first computer-use provider be embedded or launched as an external helper?
-- What is the minimum viable FCP workflow for the first demo: assembly, creative direction, monitoring, or all three?
-- How much of the current MojoSolo brain should remain repo-bundled versus moved to user-local state at first launch?
+### Q1: Router model stack
+Three-tier routing — deterministic first, LLM only when needed:
+
+1. **Deterministic router** — exact tool/intent matches with no LLM call. Fast, free, reproducible.
+2. **Claude (claude-sonnet-4-6)** — ambiguous or multi-step intent resolution. Primary LLM.
+3. **OpenAI fallback** — only when Claude is unavailable, rate-limited, or explicitly selected by the user.
+
+Model switching is prohibited mid-run for stateful jobs (FCP/Motion workflows). Once a job starts on a model, it completes on that model or fails cleanly. Both models are behind a provider abstraction.
+
+### Q2: Computer-use provider — embedded vs external helper
+External helper process (XPC service). Reasons:
+
+- Screen capture and input simulation entitlements are properly scoped to a helper
+- Process isolation protects the shell from computer-use crashes
+- The helper can be updated or swapped independently of the shell
+- This is the correct macOS pattern for privileged operations
+
+For Phase 1 the helper launches as a child process. For Phase 3 it becomes a proper XPC service.
+
+### Q3: Minimum viable FCP workflow for first demo
+**Assembly + Monitoring.** Creative direction deferred to Phase 2.
+
+- Assembly: drop clips onto a timeline using a repeatable template. Directly serves the ElanPresentation credit-union workflow.
+- Monitoring: watch render queue and export progress, fire alerts when jobs complete or fail.
+
+Creative direction (describe a mood, agent decides pacing/transitions) requires mature vision loops and is a Phase 2 milestone.
+
+### Q4: Brain bundling vs user-local
+Phase 1: brain stays repo-bundled (`knowledge-corpus/data/mojosolo_operating_brain.json`). A `BRAIN_PATH` env override allows pointing to a local file without code changes.
+
+Phase 3: onboarding copies the default brain to `~/Library/Application Support/MojoShell/brain.json` and the app uses that path going forward. The repo-bundled file becomes the seed template, not the live state.
