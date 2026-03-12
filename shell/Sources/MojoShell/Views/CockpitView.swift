@@ -1,15 +1,5 @@
 import SwiftUI
 
-private struct PersonaCardData: Identifiable {
-    let id: String
-    let persona: String
-    let account: String
-    let role: String
-    let lane: String
-    let isPrimaryReply: Bool
-    let isCatchAll: Bool
-}
-
 private struct PersonaCardView: View {
     let data: PersonaCardData
 
@@ -52,28 +42,49 @@ private struct PersonaCardView: View {
     }
 }
 
-private func parsePersonas(from json: String) -> [PersonaCardData] {
-    guard
-        let data = json.data(using: .utf8),
-        let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-        let accounts = root["accounts"] as? [[String: Any]]
-    else { return [] }
+private struct BrainOverviewCardView: View {
+    let data: BrainOverviewCardData
 
-    return accounts.compactMap { dict in
-        guard
-            let id = dict["persona_id"] as? String,
-            let persona = dict["persona"] as? String,
-            let account = dict["account"] as? String
-        else { return nil }
-        return PersonaCardData(
-            id: id,
-            persona: persona,
-            account: account,
-            role: dict["role"] as? String ?? "",
-            lane: dict["default_lane"] as? String ?? "",
-            isPrimaryReply: dict["primary_reply_from"] as? Bool ?? false,
-            isCatchAll: dict["catch_all"] as? Bool ?? false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(data.title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(data.value)
+                .font(.system(.title3, design: .rounded).bold())
+            Text(data.detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(.separator, lineWidth: 1)
         )
+    }
+}
+
+private struct StatusDotView: View {
+    let status: NowPlayingStatus
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
+    }
+
+    private var color: Color {
+        switch status {
+        case .live:
+            return .green
+        case .stopped:
+            return .orange
+        case .error:
+            return .red
+        }
     }
 }
 
@@ -83,11 +94,15 @@ struct CockpitView: View {
     @State private var personaMapResult = ""
     @State private var parsedPersonas: [PersonaCardData] = []
     @State private var brainOverviewResult = "Tap Brain Overview"
+    @State private var parsedBrainOverview: BrainOverviewPanelData?
     @State private var nowPlayingResult = "Tap Now Playing"
+    @State private var parsedNowPlaying = parseNowPlaying(from: "")
     @State private var isScanning = false
     @State private var isLoadingPersonaMap = false
     @State private var isLoadingBrainOverview = false
     @State private var isLoadingNowPlaying = false
+    @State private var lastNowPlayingRefresh: Date?
+    @State private var hasLoadedInitialPanels = false
 
     var body: some View {
         HSplitView {
@@ -138,9 +153,43 @@ struct CockpitView: View {
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(brainOverviewResult)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let parsedBrainOverview {
+                            Text(parsedBrainOverview.headline)
+                                .font(.system(.body, design: .rounded).bold())
+                            Text(parsedBrainOverview.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            HStack(alignment: .top, spacing: 8) {
+                                ForEach(parsedBrainOverview.cards) { card in
+                                    BrainOverviewCardView(data: card)
+                                }
+                            }
+
+                            if !parsedBrainOverview.sections.isEmpty {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Sections")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(parsedBrainOverview.sections.joined(separator: " • "))
+                                        .font(.caption2)
+                                }
+                            }
+
+                            if !parsedBrainOverview.machineEntities.isEmpty {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Machine Entities")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(parsedBrainOverview.machineEntities.joined(separator: " • "))
+                                        .font(.caption2)
+                                }
+                            }
+                        } else {
+                            Text(brainOverviewResult)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         Button(isLoadingBrainOverview ? "Loading..." : "Brain Overview") {
                             Task {
                                 await loadBrainOverview()
@@ -154,12 +203,29 @@ struct CockpitView: View {
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(nowPlayingResult)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 6) {
+                            StatusDotView(status: parsedNowPlaying.status)
+                            Text(parsedNowPlaying.title)
+                                .font(.system(.body, design: .rounded).bold())
+                        }
+                        Text(parsedNowPlaying.subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(parsedNowPlaying.detail)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        if let lastNowPlayingRefresh {
+                            Text("Updated \(lastNowPlayingRefresh.formatted(date: .omitted, time: .shortened)) • Auto-refresh every 30s")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Auto-refresh every 30s")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                         Button(isLoadingNowPlaying ? "Loading..." : "Now Playing") {
                             Task {
-                                await loadNowPlaying()
+                                await loadNowPlaying(triggeredByPoll: false)
                             }
                         }
                         .disabled(isLoadingNowPlaying)
@@ -195,8 +261,21 @@ struct CockpitView: View {
             .frame(minWidth: 320)
         }
         .navigationTitle("Cockpit")
-        .onAppear {
-            Task { await loadPersonaMap() }
+        .task {
+            guard !hasLoadedInitialPanels else { return }
+            hasLoadedInitialPanels = true
+            await loadPersonaMap()
+            await loadBrainOverview()
+            await loadNowPlaying(triggeredByPoll: false)
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                if Task.isCancelled {
+                    break
+                }
+                await loadNowPlaying(triggeredByPoll: true)
+            }
         }
     }
 
@@ -235,20 +314,29 @@ struct CockpitView: View {
         switch result {
         case .success(let output):
             brainOverviewResult = output.text
+            parsedBrainOverview = parseBrainOverview(from: output.text)
         case .failure(let error):
             brainOverviewResult = "Error: \(error.localizedDescription)"
+            parsedBrainOverview = nil
         }
         isLoadingBrainOverview = false
     }
 
-    private func loadNowPlaying() async {
+    private func loadNowPlaying(triggeredByPoll: Bool) async {
+        guard !isLoadingNowPlaying else { return }
         isLoadingNowPlaying = true
         let result = await appState.fetchNowPlaying()
         switch result {
         case .success(let output):
             nowPlayingResult = output.text
+            parsedNowPlaying = parseNowPlaying(from: output.text)
+            lastNowPlayingRefresh = Date()
         case .failure(let error):
             nowPlayingResult = "Error: \(error.localizedDescription)"
+            parsedNowPlaying = parseNowPlaying(from: nowPlayingResult)
+            if !triggeredByPoll {
+                lastNowPlayingRefresh = Date()
+            }
         }
         isLoadingNowPlaying = false
     }
