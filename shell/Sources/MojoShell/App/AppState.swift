@@ -6,46 +6,63 @@ final class AppState: ObservableObject {
     let daemons: DaemonManager
     let executor: MCPToolExecutor
     let computerUseProvider: any ComputerUseProvider
-    private let llmProvider: (any LLMProvider)?
+    private let llmProviders: [any LLMProvider]
 
     init(
         daemons: DaemonManager? = nil,
         executor: MCPToolExecutor? = nil,
         computerUseProvider: (any ComputerUseProvider)? = nil,
-        llmProvider: (any LLMProvider)? = nil
+        llmProviders: [any LLMProvider]? = nil
     ) {
         let resolvedDaemons = daemons ?? DaemonManager()
         self.daemons = resolvedDaemons
         self.executor = executor ?? MCPToolExecutor(daemonManager: resolvedDaemons)
         self.computerUseProvider = computerUseProvider ?? StubComputerUseProvider()
 
-        if let llmProvider {
-            self.llmProvider = llmProvider
-        } else if let key = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"], !key.isEmpty {
-            self.llmProvider = ClaudeProvider(apiKey: key)
+        if let llmProviders {
+            self.llmProviders = llmProviders
         } else {
-            self.llmProvider = nil
+            var providers: [any LLMProvider] = []
+            if let key = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"], !key.isEmpty {
+                providers.append(ClaudeProvider(apiKey: key))
+            }
+            if let key = ProcessInfo.processInfo.environment["OPENAI_API_KEY"], !key.isEmpty {
+                providers.append(OpenAIProvider(apiKey: key))
+            }
+            self.llmProviders = providers
         }
 
         resolvedDaemons.startAll()
     }
 
-    var llmProviderName: String { llmProvider?.name ?? "none" }
+    var llmProviderStackDescription: String {
+        guard !llmProviders.isEmpty else {
+            return "none"
+        }
+        return llmProviders.map { $0.name }.joined(separator: " -> ")
+    }
 
     func resolveWithLLM(prompt: String, availableTools: [LLMToolDefinition]) async -> Result<String, Error> {
-        guard let provider = llmProvider else {
-            return .failure(LLMRoutingError.noAPIKey)
+        guard !llmProviders.isEmpty else {
+            return .failure(LLMRoutingError.noAvailableProviders)
         }
-        do {
-            let response = try await provider.resolve(prompt: prompt, availableTools: availableTools)
-            if let tool = response.resolvedTool {
-                let execResult = try await executor.execute(tool)
-                return .success(execResult.text)
+
+        var failures: [String] = []
+
+        for provider in llmProviders {
+            do {
+                let response = try await provider.resolve(prompt: prompt, availableTools: availableTools)
+                if let tool = response.resolvedTool {
+                    let execResult = try await executor.execute(tool)
+                    return .success(execResult.text)
+                }
+                return .success(response.text)
+            } catch {
+                failures.append("\(provider.name): \(error.localizedDescription)")
             }
-            return .success(response.text)
-        } catch {
-            return .failure(error)
         }
+
+        return .failure(LLMRoutingError.providersFailed(failures.joined(separator: " | ")))
     }
 
     func execute(_ resolvedTool: ResolvedTool) async -> Result<MCPToolExecutionResult, Error> {

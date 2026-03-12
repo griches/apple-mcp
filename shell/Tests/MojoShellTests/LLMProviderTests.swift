@@ -14,4 +14,12 @@ final class LLMProviderTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertNotNil(request.value(forHTTPHeaderField: "x-api-key"))
     }
+
+    func testOpenAIRequestBuildsCorrectURL() throws {
+        let provider = OpenAIProvider(apiKey: "test-key", model: "gpt-test")
+        let request = try provider.buildURLRequest(prompt: "scan my inbox", tools: [])
+        XCTAssertEqual(request.url?.host, "api.openai.com")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+    }
 }

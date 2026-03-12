@@ -89,7 +89,7 @@ struct AgentTerminalView: View {
                 history.append(TerminalEntry(role: .agent, text: "Error: \(error.localizedDescription)"))
             }
         } else {
-            history.append(TerminalEntry(role: .system, text: "→ escalating to Claude (\(appState.llmProviderName))..."))
+            history.append(TerminalEntry(role: .system, text: "→ escalating to LLM stack (\(appState.llmProviderStackDescription))..."))
             let result = await appState.resolveWithLLM(
                 prompt: command,
                 availableTools: deterministicRouter.availableTools

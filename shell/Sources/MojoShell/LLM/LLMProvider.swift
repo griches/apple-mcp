@@ -18,8 +18,15 @@ protocol LLMProvider {
 }
 
 enum LLMRoutingError: LocalizedError {
-    case noAPIKey
+    case noAvailableProviders
+    case providersFailed(String)
+
     var errorDescription: String? {
-        "ANTHROPIC_API_KEY is not set. Set it in your environment to enable Claude routing."
+        switch self {
+        case .noAvailableProviders:
+            return "No LLM providers are configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable fallback routing."
+        case .providersFailed(let detail):
+            return "All configured LLM providers failed. \(detail)"
+        }
     }
 }
