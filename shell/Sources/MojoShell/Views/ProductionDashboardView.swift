@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProductionDashboardView: View {
+    @EnvironmentObject private var appState: AppState
     @State private var jobs: [MediaJob] = [
         MediaJob(
             name: "Appalachian Community FCU — Benefits Overview",
@@ -30,6 +31,8 @@ struct ProductionDashboardView: View {
             errorMessage: nil
         ),
     ]
+    @State private var workflowLog = "Run the stub assembly workflow to exercise the computer-use seam."
+    @State private var isRunningWorkflow = false
 
     var body: some View {
         HSplitView {
@@ -53,10 +56,19 @@ struct ProductionDashboardView: View {
                 Text("Real FCP control is deferred to a future computer-use integration.")
                     .foregroundStyle(.secondary)
                     .font(.callout)
-                Spacer()
-                Button("Run Assembly Workflow (Stub)") {
-                    runAssemblyWorkflow()
+                Divider()
+                ScrollView {
+                    Text(workflowLog)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                Spacer()
+                Button(isRunningWorkflow ? "Running..." : "Run Assembly Workflow (Stub)") {
+                    Task {
+                        await runAssemblyWorkflow()
+                    }
+                }
+                .disabled(isRunningWorkflow)
             }
             .padding()
             .frame(minWidth: 280)
@@ -64,8 +76,32 @@ struct ProductionDashboardView: View {
         .navigationTitle("Production")
     }
 
-    private func runAssemblyWorkflow() {
-        print("[ProductionDashboard] Assembly workflow triggered — stub provider active")
+    private func runAssemblyWorkflow() async {
+        guard let queuedIndex = jobs.firstIndex(where: { $0.status == .queued }) else {
+            workflowLog = "No queued media job available."
+            return
+        }
+
+        isRunningWorkflow = true
+        jobs[queuedIndex].status = .running
+        jobs[queuedIndex].progress = 0.15
+
+        let jobName = jobs[queuedIndex].name
+        let result = await appState.runAssemblyWorkflow(jobName: jobName)
+
+        switch result {
+        case .success(let output):
+            jobs[queuedIndex].status = .completed
+            jobs[queuedIndex].progress = 1.0
+            jobs[queuedIndex].completedAt = Date()
+            workflowLog = output
+        case .failure(let error):
+            jobs[queuedIndex].status = .failed
+            jobs[queuedIndex].errorMessage = error.localizedDescription
+            workflowLog = "Error: \(error.localizedDescription)"
+        }
+
+        isRunningWorkflow = false
     }
 }
 
