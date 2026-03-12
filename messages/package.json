@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "export-from-handles": "node scripts/export-from-handles.mjs",
     "start": "node build/index.js",
     "test": "bun test tests/applescript.test.ts && node --experimental-strip-types --no-warnings --test tests/database.test.ts",
     "test:clean": "bun test --bail tests/applescript.test.ts && node --experimental-strip-types --no-warnings --test tests/database.test.ts",

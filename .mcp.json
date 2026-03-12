@@ -3,37 +3,52 @@
     "apple-notes": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/notes/build/index.js"]
+      "args": ["/Users/david/Desktop/github/apple-mcp/notes/build/index.js"]
     },
     "apple-messages": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/messages/build/index.js"]
+      "args": ["/Users/david/Desktop/github/apple-mcp/messages/build/index.js"]
     },
     "apple-contacts": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/contacts/build/index.js"]
+      "args": ["/Users/david/Desktop/github/apple-mcp/contacts/build/index.js"]
     },
     "apple-reminders": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/reminders/build/index.js"]
+      "args": ["/Users/david/Desktop/github/apple-mcp/reminders/build/index.js"]
     },
     "apple-calendar": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/calendar/build/index.js"]
+      "args": ["/Users/david/Desktop/github/apple-mcp/calendar/build/index.js"]
     },
     "apple-maps": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/maps/build/index.js"]
+      "args": ["/Users/david/Desktop/github/apple-mcp/maps/build/index.js"]
     },
     "apple-mail": {
       "type": "stdio",
       "command": "node",
-      "args": ["/Users/garyriches/Documents/Source/MCP/Apple/mail/build/index.js"]
+      "args": ["/Users/david/Desktop/github/apple-mcp/mail/build/index.js"]
+    },
+    "apple-music": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/david/Desktop/github/apple-mcp/music/build/index.js"]
+    },
+    "mail-intelligence": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/david/Desktop/github/apple-mcp/mail-intelligence/build/index.js"]
+    },
+    "knowledge-corpus": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/david/Desktop/github/apple-mcp/knowledge-corpus/build/index.js"]
     }
   }
 }

@@ -1,0 +1,47 @@
+{
+  "name": "@griches/knowledge-corpus-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for querying a bundled knowledge corpus and research report",
+  "main": "build/index.js",
+  "bin": {
+    "knowledge-corpus-mcp": "build/index.js"
+  },
+  "files": [
+    "build/**/*.js",
+    "build/**/*.d.ts",
+    "data/**/*",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "export:laravel": "npm run build && node build/export-laravel.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "knowledge-corpus",
+    "yaml",
+    "research"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/griches/apple-mcp.git",
+    "directory": "knowledge-corpus"
+  },
+  "homepage": "https://github.com/griches/apple-mcp/tree/main/knowledge-corpus",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "yaml": "^2.8.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  }
+}

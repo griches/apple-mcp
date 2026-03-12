@@ -306,6 +306,87 @@ export interface Participant {
   service: string | null;
 }
 
+export interface MessageFromHandle extends Message {
+  chat_id: string;
+  display_name: string | null;
+  sender_handle: string | null;
+}
+
+/**
+ * List handle IDs that contain any of the given substrings (for discovering handle format).
+ */
+export function findHandlesContaining(substrings: string[]): string[] {
+  const db = openDb();
+  try {
+    const conditions = substrings.map(() => "h.id LIKE ?").join(" OR ");
+    const params = substrings.flatMap((s) => `%${s}%`);
+    const rows = db.prepare(`
+      SELECT DISTINCT h.id FROM handle h
+      WHERE ${conditions}
+    `).all(...params) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Get all messages where the sender handle is one of the given addresses
+ * (e.g. mojosolo@mac.com, david@mojosolo.com).
+ * Returns messages ordered by date ascending (oldest first) for chronological history.
+ */
+export function getMessagesFromHandles(handles: string[]): MessageFromHandle[] {
+  if (handles.length === 0) return [];
+
+  const db = openDb();
+  try {
+    const placeholders = handles.map(() => "?").join(", ");
+
+    const rows = db.prepare(`
+      SELECT
+        m.ROWID as rowid,
+        m.text,
+        m.attributedBody,
+        m.is_from_me,
+        ${DATE_SQL("m.date")} as date,
+        m.service,
+        h.id as sender_handle,
+        c.chat_identifier as chat_id,
+        c.display_name
+      FROM message m
+      JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+      JOIN chat c ON c.ROWID = cmj.chat_id
+      JOIN handle h ON h.ROWID = m.handle_id
+      WHERE ${handles.map(() => "h.id = ?").join(" OR ")}
+      ORDER BY m.date ASC
+    `).all(...handles) as Array<{
+      rowid: number;
+      text: string | null;
+      attributedBody: Buffer | null;
+      is_from_me: number;
+      date: string | null;
+      service: string | null;
+      sender_handle: string | null;
+      chat_id: string;
+      display_name: string | null;
+    }>;
+
+    return rows.map((row) => ({
+        rowid: row.rowid,
+        text: getMessageText(row.text, row.attributedBody),
+        is_from_me: row.is_from_me === 1,
+        date: row.date,
+        sender: row.sender_handle,
+        service: row.service,
+        chat_id: row.chat_id,
+        display_name: row.display_name,
+        sender_handle: row.sender_handle,
+      }));
+  } finally {
+    db.close();
+  }
+}
+
 /**
  * Get participants of a chat.
  */

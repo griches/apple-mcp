@@ -1,0 +1,721 @@
+{
+  "schema": {
+    "name": "mojosolo_operating_brain",
+    "version": "1.0.0",
+    "generated_on": "2026-03-12",
+    "target_company": "MojoSolo",
+    "target_domain": "mojosolo_internal",
+    "capture_scope": "internal_operating_context_and_repo_configuration",
+    "status": "active_canonical_brain"
+  },
+  "source_registry": [
+    {
+      "id": "src_repo_memory_email_personas",
+      "title": "Email Personas Memory",
+      "organization": "MojoSolo",
+      "url": "memory/context/email-personas.md",
+      "source_class": "internal_memory",
+      "role_in_corpus": "canonical_account_role_context",
+      "trust_level": "high"
+    },
+    {
+      "id": "src_repo_claude_memory",
+      "title": "Repo Hot Memory",
+      "organization": "MojoSolo",
+      "url": "CLAUDE.md",
+      "source_class": "internal_memory",
+      "role_in_corpus": "hot_cache_summary",
+      "trust_level": "high"
+    },
+    {
+      "id": "src_mail_intelligence_package",
+      "title": "Apple Mail Intelligence MCP Package",
+      "organization": "MojoSolo",
+      "url": "mail-intelligence/src",
+      "source_class": "repo_implementation",
+      "role_in_corpus": "live_sensor_and_brief_generation_layer",
+      "trust_level": "high"
+    },
+    {
+      "id": "src_knowledge_corpus_package",
+      "title": "Knowledge Corpus MCP Package",
+      "organization": "MojoSolo",
+      "url": "knowledge-corpus/src",
+      "source_class": "repo_implementation",
+      "role_in_corpus": "canonical_brain_query_layer",
+      "trust_level": "high"
+    }
+  ],
+  "epistemic_contract": {
+    "primary_rule": "knowledge_corpus_is_canonical_brain",
+    "secondary_rule": "mail_intelligence_is_live_sensor_layer",
+    "tertiary_rule": "laravel_is_primary_application_and_api_layer",
+    "notes_are_output_not_source_of_truth": true,
+    "memory_files_are_hot_cache_not_canonical_database": true
+  },
+  "canonical_profile": {
+    "brand_name": "MojoSolo",
+    "operating_frame": [
+      "creative_studio",
+      "operator_led_business",
+      "multi_persona_email_intelligence_system"
+    ],
+    "public_identity_summary": "MojoSolo operates distinct email personas for creative intake, human operator communication, and automated campaign or client workflow intake.",
+    "canonical_brain_location": "knowledge-corpus/data/mojosolo_operating_brain.json",
+    "primary_application_layer": "laravel",
+    "primary_output_layer": "apple_notes_daily_intel"
+  },
+  "persona_architecture": {
+    "evidence_source_ids": [
+      "src_repo_memory_email_personas",
+      "src_repo_claude_memory"
+    ],
+    "status": "explicit_internal_design",
+    "personas": [
+      {
+        "persona_id": "author",
+        "persona": "The Author",
+        "account": "iCloud",
+        "canonical_email": "mojosolo@mac.com",
+        "role": "Curated creative and intellectual intake",
+        "default_lane": "creative_intake",
+        "primary_reply_from": false,
+        "catch_all": false,
+        "notes": [
+          "This is the reading list and author persona.",
+          "Use for Superhuman style intake, Glasp, Seeking Alpha, and broader inspiration."
+        ]
+      },
+      {
+        "persona_id": "operator",
+        "persona": "The Operator",
+        "account": "david@mojosolo.com",
+        "canonical_email": "david@mojosolo.com",
+        "role": "Primary human facing reply from account",
+        "default_lane": "human_replies_required",
+        "primary_reply_from": true,
+        "catch_all": false,
+        "notes": [
+          "This is the account David gives to people.",
+          "Bias toward real humans, clients, partnerships, and dev operations."
+        ]
+      },
+      {
+        "persona_id": "machine",
+        "persona": "The Machine",
+        "account": "info@mojosolo.com",
+        "canonical_email": "info@mojosolo.com",
+        "role": "Catch all campaigns, client workflows, and automated signals",
+        "default_lane": "machine_signals",
+        "primary_reply_from": false,
+        "catch_all": true,
+        "notes": [
+          "This inbox intentionally receives creative alias traffic.",
+          "It contains active client work, meeting transcripts, and machine generated signals."
+        ]
+      }
+    ]
+  },
+  "signal_domains": {
+    "status": "active",
+    "domains": [
+      {
+        "name": "AI/Tech",
+        "matches": [
+          "ai",
+          "llm",
+          "superhuman",
+          "glasp",
+          "replit",
+          "whattheai",
+          "simple.ai",
+          "github copilot",
+          "openai"
+        ]
+      },
+      {
+        "name": "Market/Finance",
+        "matches": [
+          "seeking alpha",
+          "wall street",
+          "binance",
+          "business insider",
+          "market",
+          "finance",
+          "earnings",
+          "stocks"
+        ]
+      },
+      {
+        "name": "Industry/Benefits",
+        "matches": [
+          "employee benefit news",
+          "benefits",
+          "credit union",
+          "fcu",
+          "insurance",
+          "hr"
+        ]
+      },
+      {
+        "name": "Creative/Strategic",
+        "matches": [
+          "donald miller",
+          "medium",
+          "masterclass",
+          "apple news",
+          "storybrand",
+          "writing",
+          "creative"
+        ]
+      },
+      {
+        "name": "Dev Ops",
+        "matches": [
+          "github",
+          "ci/cd",
+          "deploy",
+          "deployment",
+          "build failed",
+          "workflow",
+          "replit",
+          "mojoos",
+          "voyani-brain"
+        ]
+      },
+      {
+        "name": "Client Work",
+        "matches": [
+          "elanpresentation",
+          "appalachian community fcu",
+          "fedchoice fcu",
+          "presentation",
+          "client deliverable"
+        ]
+      },
+      {
+        "name": "Meeting Intel",
+        "matches": [
+          "otter",
+          "standup",
+          "transcript",
+          "meeting summary",
+          "mojo standup"
+        ]
+      },
+      {
+        "name": "Platform Alerts",
+        "matches": [
+          "mojomosaicxyz",
+          "platform alert",
+          "outage",
+          "incident",
+          "status"
+        ]
+      },
+      {
+        "name": "Regulatory",
+        "matches": [
+          "wisconsin department of agriculture",
+          "dept of agriculture",
+          "regulatory",
+          "compliance",
+          "policy update"
+        ]
+      }
+    ]
+  },
+  "mail_intelligence": {
+    "notes": {
+      "folder": "Daily Intel",
+      "titlePrefix": "Daily Intel",
+      "defaultLookbackDays": 1,
+      "defaultLimitPerAccount": 20
+    },
+    "scoring": {
+      "urgentSubjectKeywords": [
+        "action required",
+        "urgent",
+        "alert",
+        "failed",
+        "failure",
+        "error",
+        "standup",
+        "summary",
+        "presentation",
+        "client",
+        "approval",
+        "invoice"
+      ],
+      "automatedSenderKeywords": [
+        "noreply",
+        "no-reply",
+        "notifications",
+        "notification",
+        "news@",
+        "updates@",
+        "hello@",
+        "support@",
+        "alerts@",
+        "github",
+        "otter",
+        "superhuman",
+        "seeking alpha",
+        "business insider",
+        "glasp"
+      ],
+      "newsletterKeywords": [
+        "newsletter",
+        "daily",
+        "weekly",
+        "digest",
+        "edition",
+        "briefing",
+        "roundup"
+      ],
+      "humanReplyKeywords": [
+        "re:",
+        "reply",
+        "following up",
+        "checking in",
+        "intro",
+        "introduction",
+        "meeting",
+        "proposal",
+        "partnership",
+        "client"
+      ]
+    },
+    "domains": [
+      {
+        "name": "AI/Tech",
+        "matches": [
+          "ai",
+          "llm",
+          "superhuman",
+          "glasp",
+          "replit",
+          "whattheai",
+          "simple.ai",
+          "github copilot",
+          "openai"
+        ]
+      },
+      {
+        "name": "Market/Finance",
+        "matches": [
+          "seeking alpha",
+          "wall street",
+          "binance",
+          "business insider",
+          "market",
+          "finance",
+          "earnings",
+          "stocks"
+        ]
+      },
+      {
+        "name": "Industry/Benefits",
+        "matches": [
+          "employee benefit news",
+          "benefits",
+          "credit union",
+          "fcu",
+          "insurance",
+          "hr"
+        ]
+      },
+      {
+        "name": "Creative/Strategic",
+        "matches": [
+          "donald miller",
+          "medium",
+          "masterclass",
+          "apple news",
+          "storybrand",
+          "writing",
+          "creative"
+        ]
+      },
+      {
+        "name": "Dev Ops",
+        "matches": [
+          "github",
+          "ci/cd",
+          "deploy",
+          "deployment",
+          "build failed",
+          "workflow",
+          "replit",
+          "mojoos",
+          "voyani-brain"
+        ]
+      },
+      {
+        "name": "Client Work",
+        "matches": [
+          "elanpresentation",
+          "appalachian community fcu",
+          "fedchoice fcu",
+          "presentation",
+          "client deliverable"
+        ]
+      },
+      {
+        "name": "Meeting Intel",
+        "matches": [
+          "otter",
+          "standup",
+          "transcript",
+          "meeting summary",
+          "mojo standup"
+        ]
+      },
+      {
+        "name": "Platform Alerts",
+        "matches": [
+          "mojomosaicxyz",
+          "platform alert",
+          "outage",
+          "incident",
+          "status"
+        ]
+      },
+      {
+        "name": "Regulatory",
+        "matches": [
+          "wisconsin department of agriculture",
+          "dept of agriculture",
+          "regulatory",
+          "compliance",
+          "policy update"
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "account": "iCloud",
+        "mailbox": "INBOX",
+        "personaId": "author",
+        "persona": "The Author",
+        "role": "Curated creative and intellectual intake",
+        "summary": "Reading list and idea intake for the creative and intellectual persona.",
+        "primaryReplyFrom": false,
+        "catchAll": false,
+        "defaultLane": "creative_intake",
+        "sourceRules": [
+          {
+            "label": "Seeking Alpha",
+            "matches": [
+              "seeking alpha",
+              "wall street breakfast"
+            ],
+            "domain": "Market/Finance",
+            "lane": "creative_intake",
+            "priority": "normal"
+          },
+          {
+            "label": "AI Builder Club",
+            "matches": [
+              "ai builder club"
+            ],
+            "domain": "AI/Tech",
+            "lane": "creative_intake",
+            "priority": "normal"
+          },
+          {
+            "label": "Superhuman AI",
+            "matches": [
+              "superhuman ai",
+              "superhuman"
+            ],
+            "domain": "AI/Tech",
+            "lane": "creative_intake",
+            "priority": "high"
+          },
+          {
+            "label": "Glasp",
+            "matches": [
+              "glasp"
+            ],
+            "domain": "Creative/Strategic",
+            "lane": "creative_intake",
+            "priority": "normal"
+          },
+          {
+            "label": "Business Insider",
+            "matches": [
+              "business insider"
+            ],
+            "domain": "Market/Finance",
+            "lane": "creative_intake",
+            "priority": "normal"
+          },
+          {
+            "label": "Apple News",
+            "matches": [
+              "apple news"
+            ],
+            "domain": "Creative/Strategic",
+            "lane": "creative_intake",
+            "priority": "normal"
+          }
+        ]
+      },
+      {
+        "account": "david@mojosolo.com",
+        "mailbox": "INBOX",
+        "personaId": "operator",
+        "persona": "The Operator",
+        "role": "Primary human-facing reply-from account",
+        "summary": "Human relationships, deals, dev operations, and the primary outward identity.",
+        "primaryReplyFrom": true,
+        "catchAll": false,
+        "defaultLane": "human_replies_required",
+        "sourceRules": [
+          {
+            "label": "GitHub",
+            "matches": [
+              "github",
+              "mojoos",
+              "voyani-brain"
+            ],
+            "domain": "Dev Ops",
+            "lane": "ops_signals",
+            "priority": "high"
+          },
+          {
+            "label": "Replit",
+            "matches": [
+              "replit"
+            ],
+            "domain": "Dev Ops",
+            "lane": "ops_signals",
+            "priority": "normal"
+          },
+          {
+            "label": "LinkedIn",
+            "matches": [
+              "linkedin"
+            ],
+            "domain": "Creative/Strategic",
+            "lane": "human_replies_required",
+            "priority": "normal"
+          },
+          {
+            "label": "Binance",
+            "matches": [
+              "binance"
+            ],
+            "domain": "Market/Finance",
+            "lane": "ops_signals",
+            "priority": "normal"
+          },
+          {
+            "label": "Employee Benefit News",
+            "matches": [
+              "employee benefit news"
+            ],
+            "domain": "Industry/Benefits",
+            "lane": "signal_watch",
+            "priority": "normal"
+          },
+          {
+            "label": "Axios",
+            "matches": [
+              "axios"
+            ],
+            "domain": "Creative/Strategic",
+            "lane": "signal_watch",
+            "priority": "normal"
+          },
+          {
+            "label": "TechCrunch",
+            "matches": [
+              "techcrunch"
+            ],
+            "domain": "AI/Tech",
+            "lane": "signal_watch",
+            "priority": "normal"
+          },
+          {
+            "label": "Donald Miller",
+            "matches": [
+              "donald miller",
+              "storybrand"
+            ],
+            "domain": "Creative/Strategic",
+            "lane": "signal_watch",
+            "priority": "normal"
+          }
+        ]
+      },
+      {
+        "account": "info@mojosolo.com",
+        "mailbox": "INBOX",
+        "personaId": "machine",
+        "persona": "The Machine",
+        "role": "Catch-all campaigns, client workflows, and automated signals",
+        "summary": "Campaign aliases, client delivery, meeting intel, and platform notifications.",
+        "primaryReplyFrom": false,
+        "catchAll": true,
+        "defaultLane": "machine_signals",
+        "sourceRules": [
+          {
+            "label": "ElanPresentation",
+            "matches": [
+              "elanpresentation",
+              "appalachian community fcu",
+              "fedchoice fcu",
+              "credit union"
+            ],
+            "domain": "Client Work",
+            "lane": "client_work",
+            "priority": "high"
+          },
+          {
+            "label": "Otter.ai",
+            "matches": [
+              "otter",
+              "mojo standup",
+              "meeting summary",
+              "transcript"
+            ],
+            "domain": "Meeting Intel",
+            "lane": "meeting_intel",
+            "priority": "high"
+          },
+          {
+            "label": "MojoMosaicXYZ",
+            "matches": [
+              "mojomosaicxyz",
+              "platform alert",
+              "incident",
+              "status page"
+            ],
+            "domain": "Platform Alerts",
+            "lane": "platform_alerts",
+            "priority": "high"
+          },
+          {
+            "label": "Wisconsin Dept of Agriculture",
+            "matches": [
+              "wisconsin department of agriculture",
+              "dept of agriculture",
+              "wisconsin department"
+            ],
+            "domain": "Regulatory",
+            "lane": "regulatory_updates",
+            "priority": "normal"
+          },
+          {
+            "label": "WhatTheAI",
+            "matches": [
+              "whattheai"
+            ],
+            "domain": "AI/Tech",
+            "lane": "machine_signals",
+            "priority": "normal"
+          },
+          {
+            "label": "simple.ai",
+            "matches": [
+              "simple.ai",
+              "simple ai"
+            ],
+            "domain": "AI/Tech",
+            "lane": "machine_signals",
+            "priority": "normal"
+          }
+        ]
+      }
+    ]
+  },
+  "client_workflows": {
+    "status": "active",
+    "items": [
+      {
+        "workflow": "elanpresentation_credit_union_presentations",
+        "primary_inbox": "info@mojosolo.com",
+        "priority": "high",
+        "notes": "This is active client work and should not be treated as generic automation."
+      },
+      {
+        "workflow": "otter_meeting_intel",
+        "primary_inbox": "info@mojosolo.com",
+        "priority": "high",
+        "notes": "Standup and meeting transcripts should feed the daily intelligence layer."
+      }
+    ]
+  },
+  "output_targets": {
+    "status": "active",
+    "targets": [
+      {
+        "name": "daily_intel_notes",
+        "type": "apple_notes",
+        "destination": "Daily Intel",
+        "role": "default_brief_output"
+      },
+      {
+        "name": "laravel_brain_api",
+        "type": "laravel",
+        "destination": "config_brain_plus_database_projection",
+        "role": "primary_application_layer"
+      }
+    ]
+  },
+  "laravel_application": {
+    "status": "intended_primary_app_layer",
+    "config_namespace": "brain",
+    "suggested_models": [
+      "BrainPersona",
+      "BrainDomain",
+      "BrainSourceRule",
+      "BrainOutputTarget"
+    ],
+    "suggested_tables": [
+      "brain_personas",
+      "brain_domains",
+      "brain_source_rules",
+      "brain_output_targets"
+    ],
+    "suggested_routes": [
+      "/api/brain/overview",
+      "/api/brain/personas",
+      "/api/brain/domains",
+      "/api/brain/source-rules",
+      "/api/brain/output-targets"
+    ],
+    "notes": [
+      "Laravel should be the canonical application and API layer for this brain.",
+      "The corpus remains the source of truth; Laravel projects it into config, database, and HTTP surfaces."
+    ]
+  },
+  "machine_ingest_index": {
+    "entity_names": [
+      "MojoSolo",
+      "The Author",
+      "The Operator",
+      "The Machine",
+      "Daily Intel",
+      "ElanPresentation",
+      "Otter.ai"
+    ],
+    "domain_tags": [
+      "email_intelligence",
+      "creative_intake",
+      "client_work",
+      "meeting_intel",
+      "campaign_aliases",
+      "laravel_application_layer"
+    ],
+    "output_tags": [
+      "daily_briefs",
+      "notes",
+      "laravel_api",
+      "seed_data",
+      "operator_dashboard"
+    ]
+  }
+}

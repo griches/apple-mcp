@@ -1,0 +1,925 @@
+schema:
+  name: aaru_product_knowledge_corpus
+  version: 1.0.0
+  generated_on: '2026-03-12'
+  target_company: Aaru
+  target_domain: https://aaru.com
+  capture_scope: public_web_materials_only
+  authoring_profile:
+    deterministic_structure_ratio: 0.986
+    human_irrationality_ratio: 0.014
+    note: This ratio is a user-requested authoring profile for the corpus shape. It is not asserted as an Aaru product parameter.
+  completeness_status: high_coverage_public_web_corpus_not_private_internal_complete
+  limitations:
+  - No public API reference, developer documentation, pricing sheet, security whitepaper, model card, or architecture whitepaper
+    was found in the reviewed public materials.
+  - The corpus is restricted to publicly accessible web sources reviewed on the generation date; non-indexed, customer-only,
+    or internal materials may exist and are outside scope.
+  - Where public materials were silent, values are set to null or described as unknown rather than inferred beyond evidence.
+  epistemic_status_legend:
+    explicit_claim: Directly stated in reviewed source material.
+    external_partner_claim: Stated by a partner, validation study, or public press release about Aaru.
+    structured_inference: Derived conservatively by combining explicit public signals.
+    unknown: Not established in reviewed public materials.
+source_registry:
+- id: src_aaru_home
+  title: Aaru — Rethinking the science of prediction
+  organization: Aaru
+  url: https://aaru.com/
+  source_class: official_site
+  role_in_corpus: primary_product_positioning
+  trust_level: high
+- id: src_aaru_products
+  title: Aaru Products
+  organization: Aaru
+  url: https://aaru.com/products
+  source_class: official_site
+  role_in_corpus: product_portfolio
+  trust_level: high
+- id: src_aaru_about
+  title: About — Aaru
+  organization: Aaru
+  url: https://aaru.com/about
+  source_class: official_site
+  role_in_corpus: ethos_founders_company_claims
+  trust_level: high
+- id: src_aaru_contact
+  title: Contact — Aaru
+  organization: Aaru
+  url: https://aaru.com/contact
+  source_class: official_site
+  role_in_corpus: contact_and_demo_flow
+  trust_level: high
+- id: src_aaru_privacy
+  title: Privacy Policy — Aaru
+  organization: Aaru
+  url: https://aaru.com/policies/privacy
+  source_class: official_policy
+  role_in_corpus: privacy_governance
+  trust_level: high
+- id: src_aaru_cookies
+  title: Cookie Policy — Aaru
+  organization: Aaru
+  url: https://aaru.com/policies/cookies
+  source_class: official_policy
+  role_in_corpus: cookie_governance
+  trust_level: high
+- id: src_aaru_dpa
+  title: Data Processing Agreement — Aaru
+  organization: Aaru
+  url: https://aaru.com/policies/data-processing
+  source_class: official_policy
+  role_in_corpus: data_processing_governance
+  trust_level: high
+- id: src_aaru_careers_software_engineer
+  title: Software Engineer — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/software-engineer
+  source_class: official_careers
+  role_in_corpus: stack_and_product_surface_signals
+  trust_level: high
+- id: src_aaru_careers_platform
+  title: Software Engineer, Platform — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/207a61bf-084c-403c-b60a-5c8efda4f83c
+  source_class: official_careers
+  role_in_corpus: platform_scope_signals
+  trust_level: high
+- id: src_aaru_careers_infrastructure
+  title: Software Engineer, Infrastructure — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/48fffbe2-f5e9-4c48-a686-11a829955884
+  source_class: official_careers
+  role_in_corpus: infrastructure_scope_signals
+  trust_level: high
+- id: src_aaru_careers_forecasting
+  title: Research Lead, Forecasting — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/f718d12f-67e9-4fe9-91cc-9e3b69ff00fe
+  source_class: official_careers
+  role_in_corpus: forecasting_method_signals
+  trust_level: high
+- id: src_aaru_careers_individuals
+  title: Research Lead, Individuals — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/877146b7-41a1-4ba9-b5b5-76d5abc7a21c
+  source_class: official_careers
+  role_in_corpus: individual_modeling_method_signals
+  trust_level: high
+- id: src_aaru_careers_organizations
+  title: Research Lead, Organizations — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/d2fb9f74-4e97-47e0-ad4f-dc64bfe5ee99
+  source_class: official_careers
+  role_in_corpus: organizational_modeling_method_signals
+  trust_level: high
+- id: src_aaru_careers_fde
+  title: Forward Deployed Engineer, Simulations — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/41936e87-4707-4a10-84a1-8a213fd206be
+  source_class: official_careers
+  role_in_corpus: client_integration_signals
+  trust_level: high
+- id: src_aaru_careers_deployment
+  title: Deployment Manager / Deployment Lead — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/807d62c0-7bc4-453c-9a60-d6e35b65c993
+  source_class: official_careers
+  role_in_corpus: delivery_model_signals
+  trust_level: high
+- id: src_aaru_careers_channel
+  title: Deployment Manager, Channel — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/1fab9358-f236-4bcc-aa9f-f7639d6e6426
+  source_class: official_careers
+  role_in_corpus: advisory_channel_signals
+  trust_level: high
+- id: src_aaru_careers_designer
+  title: Product Designer — Aaru
+  organization: Aaru
+  url: https://aaru.com/careers/designer
+  source_class: official_careers
+  role_in_corpus: ux_visualization_signals
+  trust_level: high
+- id: src_ey_validation
+  title: Wealth and asset management AI simulation with Aaru | EY
+  organization: EY
+  url: https://www.ey.com/en_us/insights/wealth-asset-management/how-ai-simulation-accelerates-growth-in-wealth-and-asset-management
+  source_class: official_partner_or_validation
+  role_in_corpus: external_validation_methodology_and_results
+  trust_level: high
+- id: src_accenture_investment
+  title: Accenture Invests in and Collaborates with AI-Powered Agentic Prediction Engine Aaru
+  organization: Accenture
+  url: https://newsroom.accenture.com/news/2025/accenture-invests-in-and-collaborates-with-ai-powered-agentic-prediction-engine-aaru
+  source_class: official_partner_or_investor
+  role_in_corpus: partnership_and_positioning_validation
+  trust_level: high
+- id: src_interpublic_partnership
+  title: Interpublic Partners with Aaru to Leverage AI-Powered Predictive Simulations to Accelerate, Scale and Optimize Marketing
+  organization: Interpublic Group
+  url: https://www.globenewswire.com/news-release/2025/08/11/3130751/0/en/interpublic-partners-with-aaru-to-leverage-ai-powered-predictive-simulations-to-accelerate-scale-and-optimize-marketing.html
+  source_class: official_partner_press_release
+  role_in_corpus: marketing_use_case_validation
+  trust_level: high
+- id: src_heartland_poll
+  title: Heartland Forward Releases First-of-its-Kind Poll on AI Sentiment Across the Heartland
+  organization: Heartland Forward
+  url: https://heartlandforward.org/news/press-release-heartland-forward-releases-first-of-its-kind-poll-on-ai-sentiment-across-the-heartland/
+  source_class: official_partner_or_customer_press_release
+  role_in_corpus: public_methodology_example
+  trust_level: medium_high
+epistemic_contract:
+  public_web_only: true
+  unknown_value_policy: explicit_null_or_explicit_unknown_string
+  self_claims_are_not_auto_validated: true
+  external_partner_claims_are_not_treated_as_internal_architecture_proof: true
+  absence_of_public_evidence_is_not_evidence_of_absence: true
+  review_goal: maximize public-source coverage while minimizing unsupported inference
+canonical_profile:
+  evidence_source_ids:
+  - src_aaru_home
+  - src_aaru_products
+  - src_aaru_about
+  - src_aaru_contact
+  - src_aaru_careers_fde
+  - src_aaru_careers_channel
+  - src_accenture_investment
+  status: mixed_explicit_and_structured_inference
+  brand_name: Aaru
+  legal_name: Aaru Inc.
+  website: https://aaru.com
+  company_frame:
+    value:
+    - predictive_intelligence_company
+    - multi_agent_simulation_software_company
+    - behavioral_modeling_and_applied_ai_company
+    status: explicit_claim
+  public_positioning_summary: Aaru presents itself as a predictive intelligence company that simulates individuals, groups,
+    organizations, and entire populations with multi-agent AI so operators can test decisions before acting.
+  customer_domain_segments:
+  - business_private_sector
+  - government_public_sector
+  - politics
+  go_to_market_motion:
+    value:
+    - request_demo_contact_led_sales
+    - direct_client_deployment
+    - channel_or_advisory_partnerships
+    - forward_deployed_engineering
+    status: mixed_explicit_and_structured_inference
+  public_access_model:
+    request_demo_or_contact_entrypoint_found: true
+    public_pricing_found_in_review_scope: false
+    pricing_status_note: No public pricing page was found in the reviewed materials.
+    public_self_serve_documentation_found_in_review_scope: false
+    absence_interpretation_rule: Fields ending in _found_in_review_scope describe only what was found during the reviewed
+      public-web pass.
+  contact:
+    general_inquiries_email: inquiries@aaru.com
+    jobs_email: jobs@aaru.com
+    contact_flow_fields:
+    - first_name
+    - last_name
+    - business_email
+    - job_title
+    - organization
+    - project_message
+  operating_location_public_signal:
+    value: New York City, New York, USA
+    status: structured_inference
+    confidence: medium
+    basis: Multiple open roles are explicitly based in New York City and describe Aaru as an in-person company there.
+    hq_confirmed: false
+  founders:
+  - name: Ned Koh
+    role: Co-Founder & President
+    status: explicit_claim
+  - name: Cam Fink
+    role: Co-Founder & CEO
+    status: explicit_claim
+  - name: John Kessler
+    role: Co-Founder & CTO
+    status: explicit_claim
+positioning_and_messaging:
+  evidence_source_ids:
+  - src_aaru_home
+  - src_aaru_products
+  - src_aaru_about
+  - src_accenture_investment
+  status: explicit_claim
+  primary_short_phrases:
+  - Rendering human granularity.
+  - Simulate any decision.
+  - decision dominance
+  - Working toward a more certain future
+  value_proposition_summary:
+  - Replace or augment slow, bias-prone research with simulation-driven foresight.
+  - Model populations that are hard to reach directly.
+  - Test futures that do not yet exist in the real world.
+  - Deliver outputs that connect predicted behavior to operational decisions.
+  claimed_differentiators:
+  - Aaru argues that humans misreport future behavior because memory, incentives, and social pressure distort answers.
+  - Aaru positions simulation as a way to represent difficult-to-reach populations at scale.
+  - Aaru claims to operate across industries and use cases, adapting outputs to the operator and problem.
+  - Aaru and partners frame the system as faster than surveys, focus groups, and conventional research experiments.
+  claimed_outcomes:
+  - analysis
+  - segmentation
+  - strategic pathways
+  - predictions
+  - decision-ready outputs
+  replacement_or_complement_targets:
+  - surveys
+  - focus_groups
+  - traditional_market_research
+  - research_experiments
+  - retrospective_only_decisioning
+philosophy_and_theory_of_operation:
+  evidence_source_ids:
+  - src_aaru_home
+  - src_aaru_about
+  status: explicit_claim
+  ethos:
+    name: transactionalism
+    aaru_definition: Aaru says its multi-agent approach is rooted in the belief that value is created through dynamic interactions
+      among multiple parties.
+  core_beliefs:
+  - belief: Humans are unreliable narrators of their own behavior.
+    status: explicit_claim
+  - belief: The most valuable populations to understand are often the hardest to access.
+    status: explicit_claim
+  - belief: The future cannot be surveyed directly because many high-value decisions concern conditions that do not yet exist.
+    status: explicit_claim
+  - belief: Prediction is only useful if it closes the gap between data and action for the operator.
+    status: explicit_claim
+  - belief: Whole-world simulation is the long-horizon ambition toward which Aaru sees its products as incremental pieces.
+    status: explicit_claim
+  human_behavior_assumptions:
+  - memory_can_fail
+  - incentives_can_distort_answers
+  - social_pressure_can_warp_self_reported_responses
+  - stated_preference_and_real_behavior_can_diverge
+  operator_logic:
+    statement: Every Aaru system is described as connecting predicted behavior to the decision it informs so users act on
+      evidence rather than instinct.
+    status: explicit_claim
+  philosophical_motifs:
+  - simulation_as_measurement
+  - whole_world_simulation
+  - decision_dominance
+  - certainty_through_behavioral_modeling
+claim_calibration:
+  evidence_source_ids:
+  - src_aaru_home
+  - src_aaru_about
+  - src_ey_validation
+  - src_accenture_investment
+  - src_interpublic_partnership
+  externally_supported_claims:
+  - Aaru participated in an EY validation exercise that recreated a major wealth management study in one day and achieved
+    a median Spearman correlation of 0.90 across 53 matched single-select questions.
+  - Accenture Ventures invested in Aaru and Accenture Song said it intends to integrate Lumen into AI products and services.
+  - Interpublic publicly announced a strategic partnership with Aaru for predictive simulations in marketing workflows.
+  self_descriptions_requiring_caution:
+  - unprecedented_accuracy
+  - predict_the_worlds_events
+  - more_accurate_than_any_survey_or_traditional_research
+  - used_to_win_wars
+  non_claims:
+  - No public material reviewed establishes that Aaru guarantees future outcomes.
+  - No public material reviewed establishes universal superiority over all research methods in all contexts.
+  - EY explicitly noted that future behavior is inherently uncertain and that AI simulation does not guarantee what people
+    will do.
+domain_model:
+  evidence_source_ids:
+  - src_aaru_home
+  - src_aaru_products
+  - src_aaru_about
+  - src_aaru_careers_individuals
+  - src_aaru_careers_organizations
+  - src_aaru_careers_forecasting
+  - src_heartland_poll
+  - src_ey_validation
+  status: mixed_explicit_and_structured_inference
+  modeled_entity_classes:
+  - individual
+  - small_group
+  - organization
+  - institution
+  - stakeholder
+  - audience
+  - citizen
+  - electorate
+  - customer
+  - population
+  decision_object_classes:
+  - product
+  - policy
+  - campaign
+  - communication
+  - crisis_response
+  - regulatory_shift
+  - program_design
+  - infrastructure_rollout
+  - election
+  - narrative
+  - price_change
+  - market_strategy
+  modeling_concepts:
+  - agent
+  - synthetic_or_simulated_population
+  - behavioral_architecture
+  - signal
+  - belief_system
+  - distribution
+  - hypothetical
+  - scenario
+  - environment
+  - structured_prediction_input
+  - outcome
+  - analysis
+  - segment
+  - strategic_pathway
+  canonical_relations:
+  - operator_defines_decision_problem
+  - decision_problem_targets_population_or_actor_class
+  - signals_are_ingested_and_structured
+  - agents_are_constructed_or_orchestrated_to_mirror_relevant_human_behavior
+  - agents_interact_with_simulated_environments_and_hypotheticals
+  - simulation_generates_predicted_outcomes
+  - predicted_outcomes_are_transformed_into_operator_facing_analysis
+simulation_pipeline:
+  evidence_source_ids:
+  - src_aaru_home
+  - src_aaru_careers_forecasting
+  - src_aaru_careers_individuals
+  - src_aaru_careers_organizations
+  - src_aaru_careers_infrastructure
+  - src_ey_validation
+  - src_accenture_investment
+  - src_heartland_poll
+  - src_interpublic_partnership
+  status: mixed_explicit_and_external_partner_claim
+  input_signal_families:
+  - family: demographic
+    status: external_partner_claim
+  - family: behavioral
+    status: external_partner_claim
+  - family: sentiment
+    status: external_partner_claim
+  - family: organizational_behavior
+    status: explicit_claim
+  - family: individual_specific_signals
+    status: explicit_claim
+  - family: real_world_event_signals
+    status: explicit_claim
+  - family: public_data_sources
+    status: external_partner_claim
+  - family: proprietary_data_sources
+    status: external_partner_claim
+  - family: licensed_data
+    status: external_partner_claim
+  - family: recent_news_and_social_media_context
+    status: external_partner_claim
+  ingestion_and_representation:
+  - Aaru hiring materials describe ingestion of heterogeneous real-world signals into structured prediction inputs.
+  - Aaru hiring materials describe ingesting heterogeneous signals about specific individuals and organizations.
+  - Aaru marketing materials describe linking raw distributions and mapping belief systems.
+  - Infrastructure roles indicate complex data ingestion pipelines from diverse sources.
+  modeling_primitives:
+  - multi_agent_infrastructure
+  - agents_that_mirror_humans
+  - behavioral_architectures
+  - simulated_environments
+  - scenario_permutations
+  - hypotheticals
+  reasoning_and_methods:
+    language_model_roles:
+    - signal_extraction
+    - reasoning
+    - behavioral_simulation
+    classical_method_families:
+    - forecasting
+    - predictive_modeling
+    - discrete_event_prediction
+    - time_series
+    - decision_theory
+    - behavioral_science
+    - psychometrics
+    - organizational_theory
+    - institutional_analysis
+    tractability_note: The Individuals research role explicitly mentions bounding open-ended outcome spaces into tractable
+      prediction problems.
+  execution_patterns:
+  - simulate_entire_populations
+  - run_many_permutations_or_scenarios
+  - support_prelaunch_testing
+  - support_postlaunch_optimization
+  - forecast_real_world_events
+  - recreate_large_research_studies_quickly
+  output_artifacts:
+  - predictions
+  - analysis
+  - segmentation
+  - strategic_pathways
+  - campaign_performance_estimates
+  - optimization_guidance
+  - tailored_client_analyses
+  - data_visualizations_and_charts
+  - reports
+  speed_claims:
+    minutes:
+      statement: Accenture described Aaru as delivering predictions of behavior in a matter of minutes.
+      status: external_partner_claim
+    one_day_validation_case:
+      statement: EY reported that an Aaru simulation recreated a large wealth management survey in one day instead of six
+        months.
+      status: external_partner_claim
+  publicly_unknown_pipeline_details:
+  - exact_agent_memory_design
+  - exact_model_provider_or_base_models
+  - training_data_composition_by_source
+  - orchestration_framework_details
+  - scoring_and_calibration_pipeline_details
+  - tenant_isolation_implementation_details
+product_portfolio:
+  evidence_source_ids:
+  - src_aaru_products
+  - src_accenture_investment
+  - src_interpublic_partnership
+  status: mixed_explicit_and_external_partner_claim
+  shared_portfolio_principle: Aaru says each system is purpose-built for a decision domain and connects predicted behavior
+    to the decision it informs.
+  products:
+  - name: Lumen
+    sector: business_private_sector
+    portfolio_role:
+      value: flagship_model_for_the_private_sector
+      status: external_partner_claim
+    core_purpose: Pressure-test business strategies, optimize campaigns, and forecast market reactions before committing capital.
+    use_case_taxonomy:
+    - creative_and_message_evaluation
+    - product_launch_planning
+    - pricing_strategy
+    - market_segmentation
+    - value_proposition_testing
+    - churn_prediction
+    - campaign_strategy
+    - competitive_positioning
+    - brand_perception_tracking
+    notable_external_signals:
+    - Accenture Song said it intends to integrate Lumen into AI products and services for product development, marketing,
+      customer strategy, and customer service.
+  - name: Seraph
+    sector: government_public_sector
+    portfolio_role:
+      value: government_system
+      status: explicit_claim
+    core_purpose: Evaluate how citizens, institutions, and stakeholders may respond to policy initiatives, crises, and communications
+      before deployment.
+    use_case_taxonomy:
+    - public_communication
+    - crisis_response
+    - regulatory_shift_analysis
+    - policy_sequencing
+    - program_design
+    - stakeholder_sentiment_modeling
+    - unreachable_population_modeling
+    - infrastructure_rollout_planning
+    notable_external_signals:
+    - Heartland Forward described a poll conducted by Aaru using AI-powered simulations and digital environments built from
+      recent news and social media.
+  - name: Dynamo
+    sector: politics
+    portfolio_role:
+      value: political_system
+      status: explicit_claim
+    core_purpose: Model how events and narratives affect sentiment, preference, and turnout across the electorate.
+    use_case_taxonomy:
+    - election_forecasting
+    - turnout_modeling
+    - message_testing
+    - opposition_scenario_planning
+    - endorsement_impact
+    - donor_sentiment
+    - ground_game_strategy
+    - narrative_tracking
+    notable_external_signals:
+    - Aaru says its work is used to select candidates for office.
+canonical_problem_templates:
+  evidence_source_ids:
+  - src_aaru_home
+  status: structured_inference
+  note: These are normalized templates derived from official example questions; they are paraphrased rather than quoted verbatim.
+  templates:
+  - domain: business_private_sector
+    template: Estimate customer choice shifts under a product price increase or pricing bundle change.
+  - domain: business_private_sector
+    template: Predict click-through or engagement response to alternative marketing messages before launch.
+  - domain: business_private_sector
+    template: Estimate adoption pressure and social influence effects around a product category.
+  - domain: politics
+    template: Estimate how much information a voter needs to feel confident about a lower-ballot candidate.
+  - domain: politics
+    template: Estimate support movement after a prominent endorsement in a district or race.
+  - domain: politics
+    template: Simulate likely vote choice if an election were held under current conditions.
+  - domain: government_public_sector
+    template: Compare evacuation communication strategies by income level and language group during a disaster.
+  - domain: government_public_sector
+    template: Estimate adoption of a public digital identity program among older rural citizens.
+operating_model_and_delivery:
+  evidence_source_ids:
+  - src_aaru_contact
+  - src_aaru_careers_deployment
+  - src_aaru_careers_channel
+  - src_aaru_careers_fde
+  - src_aaru_careers_designer
+  - src_interpublic_partnership
+  - src_accenture_investment
+  status: mixed_explicit_and_structured_inference
+  engagement_channels:
+  - direct_request_demo
+  - direct_client_delivery
+  - advisory_channel_delivery
+  - forward_deployed_integration
+  delivery_modes:
+  - tailored_analyses
+  - simulation_driven_insights
+  - custom_products
+  - custom_integrations
+  - custom_workflows
+  - reports
+  - data_visualizations
+  primary_user_or_buyer_personas:
+  - senior_client_stakeholder
+  - enterprise_technical_leader
+  - advisory_partner
+  - government_operator
+  - campaign_operator
+  - creative_and_strategy_team
+  technical_integration_signals:
+  - python
+  - sql
+  - rest_apis
+  - cloud_platforms
+  - data_pipelines
+  - complex_enterprise_environments
+  - government_environments
+  platform_surface_signals:
+  - Aaru has a simulation platform with user experiences and interfaces designed to show insights, predictions, outcomes,
+    and charts.
+  - The Platform team is described as building the foundation the rest of the product sits on and writing framework-level
+    code that absorbs complexity for users and agents.
+  channel_model_signals:
+  - Aaru has a channel deployment motion built to make the company indispensable to advisory partners and reach clients through
+    advisory networks.
+internal_capability_map:
+  evidence_source_ids:
+  - src_aaru_about
+  - src_aaru_careers_forecasting
+  - src_aaru_careers_individuals
+  - src_aaru_careers_organizations
+  - src_aaru_careers_platform
+  - src_aaru_careers_infrastructure
+  - src_aaru_careers_fde
+  - src_aaru_careers_deployment
+  - src_aaru_careers_channel
+  status: structured_inference_from_roles
+  research_tracks:
+  - name: forecasting
+    scope: forecast real-world events across domains
+  - name: individuals
+    scope: model how specific people and small groups make decisions
+  - name: organizations
+    scope: model how organizations behave and make decisions
+  engineering_tracks:
+  - name: platform
+    scope: build the product foundation and user/agent-facing abstractions
+  - name: infrastructure
+    scope: scale compute, reliability, data ingestion, and long-running pipelines
+  - name: solutions_or_forward_deployed
+    scope: embed Aaru technology in complex client environments through custom products and integrations
+  commercial_and_delivery_tracks:
+  - name: deployment
+    scope: configure analyses and deliver simulation-driven insights to senior stakeholders
+  - name: channel_deployment
+    scope: serve advisory partners and their client networks
+technical_stack_signals_from_public_hiring:
+  evidence_source_ids:
+  - src_aaru_careers_software_engineer
+  - src_aaru_careers_platform
+  - src_aaru_careers_infrastructure
+  - src_aaru_careers_fde
+  - src_aaru_careers_designer
+  status: structured_inference_from_hiring_signals
+  interpretation_rule: These are public hiring signals and should be treated as technology indicators rather than guaranteed
+    exhaustive architecture facts.
+  application_stack_signals:
+    languages:
+    - Python
+    - JavaScript
+    - TypeScript
+    frontend:
+    - React
+    backend:
+    - Node.js
+    - FastAPI
+    api_style:
+    - RESTful APIs
+    data_layer_signals:
+    - databases_for_storage_and_retrieval
+  engineering_system_signals:
+  - deployment_pipelines
+  - unit_tests
+  - integration_tests
+  - high_performance_low_latency_infrastructure
+  - complex_data_ingestion_pipelines
+  - reliability_optimization
+  - cloud_primitives
+  - networking_protocol_awareness_http_tls
+  - transition_of_research_experiments_into_production_pipelines
+  - framework_level_code_for_users_and_agents
+  - long_running_computational_pipeline_bottleneck_elimination
+  research_engineering_signals:
+  - simulation_model_optimization
+  - experiment_design
+  - result_analysis
+  - accuracy_speed_consistency_improvement
+  - external_research_publication
+  publicly_unknown_stack_details:
+  - cloud_vendor
+  - gpu_or_accelerator_vendor
+  - container_or_orchestrator_choice
+  - database_brands
+  - vector_database_usage
+  - exact_model_provider
+  - on_premises_deployment_support
+  - multi_tenant_design
+  - sla_and_uptime_commitments
+governance_privacy_and_security:
+  evidence_source_ids:
+  - src_aaru_privacy
+  - src_aaru_cookies
+  - src_aaru_dpa
+  - src_interpublic_partnership
+  status: mixed_explicit_and_external_partner_claim
+  policy_dates:
+    privacy_policy_effective_date: '2025-04-24'
+    privacy_policy_last_updated: '2025-04-24'
+    cookie_policy_effective_date: '2024-04-24'
+    dpa_effective_date: '2025-04-24'
+  data_collection_categories:
+    personal_information:
+    - name
+    - email_address
+    - phone_number
+    - postal_address
+    - payment_information
+    - account_credentials
+    non_personal_information:
+    - browser_type
+    - ip_address
+    - device_identifiers
+    - pages_visited
+    - time_and_date_of_access
+    - referring_url
+  processing_purposes:
+  - provide_and_maintain_services
+  - process_transactions
+  - respond_to_inquiries_and_support
+  - personalize_and_improve_experience
+  - send_marketing_if_opted_in
+  - comply_with_legal_obligations
+  - detect_and_prevent_fraud_and_abuse
+  sharing_and_sale:
+    shared_with:
+    - service_providers_and_vendors
+    - affiliates_within_corporate_group
+    - law_enforcement_or_regulators_when_required
+    - parties_to_business_transfers
+    sells_personal_information: false
+  user_rights:
+  - access
+  - correction
+  - deletion
+  - restriction_or_objection
+  - data_portability
+  - withdraw_consent
+  security_statement: Aaru says it implements appropriate technical and organizational measures, while noting that no internet
+    transmission method is completely secure.
+  children_policy: Services are not directed to children under 13, or 16 where applicable.
+  cookie_categories:
+  - essential
+  - performance_and_functionality
+  - analytics_and_customization
+  - advertising
+  dpa_controls:
+  - processor_acts_on_documented_controller_instructions
+  - confidentiality_and_personnel_training
+  - technical_and_organizational_security_measures
+  - assistance_with_data_subject_requests
+  - breach_notification_without_undue_delay
+  - cooperation_with_supervisory_authorities
+  - records_of_processing_activities
+  - subprocessor_written_consent_requirement
+  - equivalent_subprocessor_obligations
+  - chapter_v_gdpr_transfer_safeguards
+  - return_or_deletion_on_termination
+  - audit_rights_for_controller
+  ethics_and_training_data_signal:
+    statement: Interpublic said Aaru maintains an ethics-first approach to responsible research and language model building
+      and exclusively trains its models on licensed data.
+    status: external_partner_claim
+  not_found_in_review_scope:
+  - public_subprocessor_list
+  - soc_2_report
+  - iso_27001_claim
+  - public_security_whitepaper
+  - public_penetration_test_summary
+  - public_data_residency_matrix
+  - granular_retention_schedule_by_data_type
+validation_and_external_evidence:
+  evidence_source_ids:
+  - src_ey_validation
+  - src_accenture_investment
+  - src_interpublic_partnership
+  - src_heartland_poll
+  - src_aaru_about
+  status: external_partner_claim_plus_self_claims
+  ey_validation_case:
+    date_signal: August 2025 partnership; article published 2025
+    summary: EY said it used Aaru's proprietary multi-agent infrastructure to recreate its Global Wealth Management Survey
+      in one day instead of six months.
+    study_scope:
+      markets: 30_plus
+      respondents_in_original_study: 3600
+      matched_single_select_questions: 53
+    reported_result_metrics:
+      median_spearman_correlation: 0.9
+      average_rmse_percentage_points: 7.1
+      average_euclidean_distance: 12.9
+    methodology_signals:
+    - real_world_datasets_including_demographic_behavioral_and_sentiment_data
+    - sources_included_national_censuses_financial_institutions_and_social_media
+    - agents_used_behavioral_architectures_modeling_decision_making_traits
+    - agents_interacted_with_simulated_environments
+    - thousands_of_strategic_scenarios_were_tested
+    important_caveat: EY explicitly said AI simulation cannot guarantee what people will do because future behavior is inherently
+      uncertain.
+  accenture_collaboration:
+    announcement_date: '2025-03-04'
+    facts:
+    - Accenture Ventures invested in Aaru.
+    - Accenture Song said it intends to integrate Lumen into AI products and services.
+    - Baiju Shah was announced as a strategic advisor to Aaru.
+    - Accenture described Aaru as simulating any customer audience to deliver predictions of behavior in minutes.
+  interpublic_partnership:
+    announcement_date: '2025-08-11'
+    facts:
+    - Interpublic announced a strategic partnership with Aaru for predictive simulations in marketing.
+    - Interpublic said Aaru would support audience sentiment forecasting for creative testing, live activations, influencer
+      marketing, corporate communications, and earned media.
+    - Interpublic said Aaru had already been used in financial services, healthcare, and CPG engagements.
+    - Interpublic said Aaru would be incorporated into campaign design modules within Interact.
+    - Interpublic said Aaru uses an ethics-first approach and licensed training data.
+  heartland_forward_poll_example:
+    announcement_date: '2024-08-28'
+    facts:
+    - Heartland Forward said its AI poll was conducted by Aaru.
+    - The release said Aaru recreated digital environments with recent news and social media and populated them with AI-generated
+      respondents reflecting real human profiles.
+    - The release said the survey included a minimum of 500 respondents per state and respondents were age 15 and older.
+  self_reported_real_world_applications:
+  - select_candidates_for_office
+  - test_movie_trailers
+  - trade_futures
+  - win_wars
+risk_and_limit_statements:
+  evidence_source_ids:
+  - src_ey_validation
+  - src_aaru_home
+  - src_aaru_about
+  status: mixed_explicit_and_external_partner_claim
+  core_limit: Aaru's public story is strongest on positioning and selected validation cases; the detailed internal mechanics
+    remain only partially public.
+  prediction_limit: Future behavior remains uncertain; public sources do not support any interpretation of Aaru as a guaranteed
+    oracle.
+  marketing_claim_limit: Public self-descriptions include bold language about accuracy and impact that should be treated as
+    marketing claims unless separately validated.
+  completeness_limit: No public evidence reviewed provides a full end-to-end specification of training data lineage, model
+    architecture, deployment topology, or evaluation protocol outside the cited examples.
+known_unknowns_and_nonclaims:
+  status: unknown
+  items:
+  - exact_model_architecture
+  - exact_agent_memory_or_state_management_approach
+  - specific_base_model_or_model_provider
+  - rlhf_or_fine_tuning_strategy
+  - customer_tenancy_model
+  - self_serve_product_availability
+  - public_api_contract
+  - sdk_languages
+  - pricing_model
+  - contract_terms
+  - service_level_agreements
+  - public_compliance_certifications
+  - detailed_subprocessor_inventory
+  - data_residency_options
+  - on_prem_or_air_gapped_deployment_support
+  - formal_model_cards
+  - formal_bias_audit_reports
+machine_ingest_index:
+  entity_names:
+  - Aaru
+  - Lumen
+  - Seraph
+  - Dynamo
+  - Ned Koh
+  - Cam Fink
+  - John Kessler
+  domain_tags:
+  - predictive_intelligence
+  - multi_agent_simulation
+  - behavioral_modeling
+  - applied_ai
+  - market_research
+  - forecasting
+  - government_decision_support
+  - political_modeling
+  - marketing_simulation
+  method_tags:
+  - language_models
+  - agents
+  - hybrid_modeling
+  - forecasting
+  - decision_theory
+  - behavioral_science
+  - psychometrics
+  - organizational_theory
+  - institutional_analysis
+  input_tags:
+  - demographic_data
+  - behavioral_data
+  - sentiment_data
+  - news_context
+  - social_media_context
+  - proprietary_data
+  - public_data
+  - licensed_data
+  output_tags:
+  - predictions
+  - analysis
+  - segmentation
+  - strategic_pathways
+  - campaign_guidance
+  - scenario_evaluation
+  - visualization
+  - reporting
+  commercial_tags:
+  - enterprise
+  - government
+  - advisory_channel
+  - forward_deployed
+  - demo_led_sales

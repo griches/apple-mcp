@@ -1,6 +1,6 @@
-# Apple MCP Servers
+# MCP Servers
 
-A collection of [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers that provide AI assistants with access to native Apple applications on macOS.
+A collection of [Model Context Protocol (MCP)](https://modelcontextprotocol.io) servers, primarily for native Apple applications on macOS, plus a canonical knowledge-brain server and a mail-intelligence layer built on top of it.
 
 ## Servers
 
@@ -13,17 +13,18 @@ A collection of [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 
 | [Apple Reminders](#apple-reminders) | Done | Create, update, complete, and manage reminders and lists |
 | [Apple Calendar](#apple-calendar) | Done | Create, update, and manage calendar events |
 | [Apple Maps](#apple-maps) | Done | Search locations, get directions, and drop pins (visual only — limited by Apple's automation support) |
+| [Knowledge Corpus](#knowledge-corpus) | Done | Query the canonical MojoSolo operating brain and export a Laravel projection |
+| [Apple Mail Intelligence](#apple-mail-intelligence) | Done | Read three configured inbox personas from the canonical brain, classify signals, and write a Daily Intel brief to Apple Notes |
 
 ## Requirements
 
-- **macOS** (uses AppleScript and macOS-specific APIs)
 - **Node.js** 18+ (22+ for Apple Messages)
-- **Full Disk Access** granted to your terminal app (System Settings > Privacy & Security > Full Disk Access) — required for reading the Messages database
-- **The associated Apple app must be running** — each MCP server communicates with its corresponding app via AppleScript, so the app (e.g. Contacts, Mail, Notes) needs to be open for the server to function
+- **Apple app servers only:** macOS, Full Disk Access for Messages, and the associated Apple app running
+- **Knowledge Corpus only:** no macOS dependency; it reads bundled or configured local corpus files
 
 ## Safety Modes
 
-All servers (except Apple Maps, which is UI-only) support two optional safety flags:
+Apple app servers (except Apple Maps, which is UI-only) support two optional safety flags:
 
 | Mode | Flag | Behaviour |
 |------|------|-----------|
@@ -170,6 +171,12 @@ cd ../maps && npm install && npm run build
 
 # Apple Mail
 cd ../mail && npm install && npm run build
+
+# Knowledge Corpus
+cd ../knowledge-corpus && npm install && npm run build
+
+# Apple Mail Intelligence
+cd ../mail-intelligence && npm install && npm run build
 ```
 
 Then configure your MCP client to run the built files directly:
@@ -204,6 +211,14 @@ Then configure your MCP client to run the built files directly:
     "apple-mail": {
       "command": "node",
       "args": ["/absolute/path/to/mail/build/index.js"]
+    },
+    "knowledge-corpus": {
+      "command": "node",
+      "args": ["/absolute/path/to/knowledge-corpus/build/index.js"]
+    },
+    "apple-mail-intelligence": {
+      "command": "node",
+      "args": ["/absolute/path/to/mail-intelligence/build/index.js"]
     }
   }
 }
@@ -406,6 +421,59 @@ An MCP server that interacts with Apple Mail via AppleScript.
 - "Show my recent emails in INBOX"
 - "Search my email for invoices"
 - "Send an email to bob@example.com about the meeting"
+
+---
+
+## Knowledge Corpus
+
+An MCP server that serves the canonical MojoSolo operating brain plus a companion markdown report and a Laravel export layer.
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_corpus_overview` | Return corpus metadata, available sections, source counts, and report availability |
+| `list_corpus_sections` | List the top-level structured corpus sections |
+| `get_corpus_section` | Return a full top-level section by name |
+| `get_mail_intelligence_config` | Return the embedded mail-intelligence config used by the live sensor layer |
+| `search_corpus` | Search the structured corpus, the report, or both |
+| `get_laravel_brain_blueprint` | Return Laravel tables, routes, and seed data derived from the brain |
+| `export_laravel_brain_pack` | Write a Laravel integration pack to a target directory |
+| `list_sources` | List all source registry entries |
+| `get_source` | Return one source registry entry by id |
+| `list_report_sections` | List available markdown report sections |
+| `get_report_section` | Return one markdown report section by title or slug |
+
+### Usage Examples
+
+- "Show me the persona_architecture section"
+- "Show me the mail-intelligence config"
+- "Give me the Laravel brain blueprint"
+- "Export the Laravel brain pack into my app"
+
+---
+
+## Apple Mail Intelligence
+
+An MCP server that treats `mojosolo@mac.com`, `david@mojosolo.com`, and `info@mojosolo.com` as distinct personas, loads its rules from the canonical brain, classifies their signals, and generates a Notes-first Daily Intel brief.
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_persona_map` | Return the configured persona/account map and note output settings |
+| `scan_persona_inboxes` | Scan recent mail and classify messages by persona, domain, lane, and priority |
+| `analyze_signal_trends` | Compare cumulative signal distributions across windows such as 30/60/90 days |
+| `generate_daily_brief` | Build the Daily Intel brief and optionally save it to Apple Notes |
+
+If Apple Notes automation stalls on the local machine, `generate_daily_brief` still returns the brief content and reports the Notes problem through `note_status` and `note_error`.
+
+### Usage Examples
+
+- "Show me the persona map"
+- "Scan the last day of inbox intelligence"
+- "Compare signals over 30, 60, and 90 days"
+- "Generate today's Daily Intel and save it to Notes"
 
 ---
 
