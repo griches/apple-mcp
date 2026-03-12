@@ -17,7 +17,7 @@ final class AppState: ObservableObject {
         let resolvedDaemons = daemons ?? DaemonManager()
         self.daemons = resolvedDaemons
         self.executor = executor ?? MCPToolExecutor(daemonManager: resolvedDaemons)
-        self.computerUseProvider = computerUseProvider ?? StubComputerUseProvider()
+        self.computerUseProvider = computerUseProvider ?? CuaComputerUseProvider()
 
         if let llmProviders {
             self.llmProviders = llmProviders
