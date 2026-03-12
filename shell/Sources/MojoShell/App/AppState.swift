@@ -6,17 +6,46 @@ final class AppState: ObservableObject {
     let daemons: DaemonManager
     let executor: MCPToolExecutor
     let computerUseProvider: any ComputerUseProvider
+    private let llmProvider: (any LLMProvider)?
 
     init(
         daemons: DaemonManager? = nil,
         executor: MCPToolExecutor? = nil,
-        computerUseProvider: (any ComputerUseProvider)? = nil
+        computerUseProvider: (any ComputerUseProvider)? = nil,
+        llmProvider: (any LLMProvider)? = nil
     ) {
         let resolvedDaemons = daemons ?? DaemonManager()
         self.daemons = resolvedDaemons
         self.executor = executor ?? MCPToolExecutor(daemonManager: resolvedDaemons)
         self.computerUseProvider = computerUseProvider ?? StubComputerUseProvider()
+
+        if let llmProvider {
+            self.llmProvider = llmProvider
+        } else if let key = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"], !key.isEmpty {
+            self.llmProvider = ClaudeProvider(apiKey: key)
+        } else {
+            self.llmProvider = nil
+        }
+
         resolvedDaemons.startAll()
+    }
+
+    var llmProviderName: String { llmProvider?.name ?? "none" }
+
+    func resolveWithLLM(prompt: String, availableTools: [LLMToolDefinition]) async -> Result<String, Error> {
+        guard let provider = llmProvider else {
+            return .failure(LLMRoutingError.noAPIKey)
+        }
+        do {
+            let response = try await provider.resolve(prompt: prompt, availableTools: availableTools)
+            if let tool = response.resolvedTool {
+                let execResult = try await executor.execute(tool)
+                return .success(execResult.text)
+            }
+            return .success(response.text)
+        } catch {
+            return .failure(error)
+        }
     }
 
     func execute(_ resolvedTool: ResolvedTool) async -> Result<MCPToolExecutionResult, Error> {

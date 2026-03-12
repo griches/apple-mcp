@@ -16,3 +16,10 @@ protocol LLMProvider {
     func resolve(prompt: String, availableTools: [LLMToolDefinition]) async throws -> LLMResponse
     func buildURLRequest(prompt: String, tools: [LLMToolDefinition]) throws -> URLRequest
 }
+
+enum LLMRoutingError: LocalizedError {
+    case noAPIKey
+    var errorDescription: String? {
+        "ANTHROPIC_API_KEY is not set. Set it in your environment to enable Claude routing."
+    }
+}

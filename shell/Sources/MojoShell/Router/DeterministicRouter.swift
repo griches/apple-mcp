@@ -125,6 +125,21 @@ struct DeterministicRouter {
         ),
     ]
 
+    var availableTools: [LLMToolDefinition] {
+        var seen = Set<String>()
+        var tools: [LLMToolDefinition] = []
+        for rule in rules {
+            let key = "\(rule.resolvedTool.server)/\(rule.resolvedTool.tool)"
+            guard seen.insert(key).inserted else { continue }
+            tools.append(LLMToolDefinition(
+                name: rule.resolvedTool.tool,
+                description: rule.phrases.first ?? rule.resolvedTool.tool,
+                server: rule.resolvedTool.server
+            ))
+        }
+        return tools
+    }
+
     func route(_ input: String) -> ResolvedTool? {
         let normalized = input
             .lowercased()

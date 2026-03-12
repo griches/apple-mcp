@@ -89,8 +89,17 @@ struct AgentTerminalView: View {
                 history.append(TerminalEntry(role: .agent, text: "Error: \(error.localizedDescription)"))
             }
         } else {
-            history.append(TerminalEntry(role: .system, text: "→ escalating to Claude..."))
-            history.append(TerminalEntry(role: .agent, text: "LLM routing is not yet wired. Set ANTHROPIC_API_KEY and connect ClaudeProvider in the next integration slice."))
+            history.append(TerminalEntry(role: .system, text: "→ escalating to Claude (\(appState.llmProviderName))..."))
+            let result = await appState.resolveWithLLM(
+                prompt: command,
+                availableTools: deterministicRouter.availableTools
+            )
+            switch result {
+            case .success(let text):
+                history.append(TerminalEntry(role: .agent, text: text))
+            case .failure(let error):
+                history.append(TerminalEntry(role: .agent, text: "LLM error: \(error.localizedDescription)"))
+            }
         }
 
         isProcessing = false
