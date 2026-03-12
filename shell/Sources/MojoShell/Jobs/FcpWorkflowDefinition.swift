@@ -129,8 +129,13 @@ enum FcpWorkflowDefinition {
             // 1. Bring FCP to front deterministically via NSWorkspace (not cmd+tab)
             .activateApp("Final Cut Pro"),
 
-            // 2. Open the Share sheet via menu shortcut (Cmd+E = Share → Master File by default)
-            .keypress("Open Share menu (Cmd+E)", key: "cmd+e", delay: 1.0),
+            // 2. Click the verified AX toolbar share button title from the live FCP discovery pass.
+            .click(
+                "Open Share menu",
+                app: "Final Cut Pro",
+                buttonTitled: "Share the project, event clip, or Timeline range",
+                delay: 1.0
+            ),
 
             // 3. If a sheet is now open, click the share destination button
             .click(

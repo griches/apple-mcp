@@ -50,6 +50,10 @@ final class FcpWorkflowTests: XCTestCase {
         // First step activates FCP deterministically — not cmd+tab
         XCTAssertEqual(steps.first?.appActivationName, "Final Cut Pro")
         XCTAssertNil(steps.first?.keypress)
+        XCTAssertEqual(
+            steps.dropFirst().first?.axQuery?.titleContaining,
+            "Share the project, event clip, or Timeline range"
+        )
     }
 
     func testMonitoringCheckFirstStepActivatesFCP() {
