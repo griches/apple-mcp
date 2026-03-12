@@ -120,37 +120,53 @@ struct WorkflowStep: Identifiable, Sendable {
 /// Predefined computer-use workflow sequences for Final Cut Pro.
 enum FcpWorkflowDefinition {
 
-    /// Assembly workflow: bring FCP to front, open the Share sheet, select the target format.
+    /// Assembly workflow: bring FCP to front, open the Export File sheet, confirm.
     ///
-    /// Phase 1 scope: gets FCP focused and opens the export dialog.
-    /// The specific share destination (Master File, YouTube, etc.) is wired per client template.
-    static func assemblyWorkflow(shareDestination: String = "Master File…") -> [WorkflowStep] {
+    /// Verified against live Final Cut Pro via AX discovery (2026-03-12):
+    ///   - Toolbar share button: "Share the project, event clip, or Timeline range"
+    ///   - File > Share submenu entry: "Export File (default)…" (greyed unless clip selected)
+    ///   - "Next" and "Save" button titles inside the sheet: TBD — requires clip selected to open
+    ///
+    /// The toolbar button click opens the same sheet as File > Share > Export File (default)…
+    /// Requires a clip or project to be selected in the FCP timeline before running.
+    ///
+    /// - Parameter shareDestination: The share-sheet destination button title to select.
+    ///   Defaults to `"Export File (default)…"` — the verified File > Share item name.
+    ///   Other options from the submenu: `"Apple Devices 1080p…"`, `"Social Platforms…"`, etc.
+    static func assemblyWorkflow(shareDestination: String = "Export File (default)…") -> [WorkflowStep] {
         [
-            // 1. Bring FCP to front deterministically via NSWorkspace (not cmd+tab)
+            // 1. Bring FCP to front deterministically (NSWorkspace, not cmd+tab)
             .activateApp("Final Cut Pro"),
 
-            // 2. Click the verified AX toolbar share button title from the live FCP discovery pass.
+            // 2. Click the toolbar Share button.
+            //    Verified AX title: "Share the project, event clip, or Timeline range"
+            //    Requires a clip/project selected; button is enabled when something is in the timeline.
             .click(
-                "Open Share menu",
+                "Open Share sheet via toolbar",
                 app: "Final Cut Pro",
                 buttonTitled: "Share the project, event clip, or Timeline range",
                 delay: 1.0
             ),
 
-            // 3. If a sheet is now open, click the share destination button
+            // 3. Select the export destination inside the sheet.
+            //    Live AX title for the default path: "Export File (default)…"
+            //    "Next" and "Save" button titles inside the open sheet are TBD —
+            //    run discover_ax_elements.py with a clip selected to get exact strings.
             .click(
-                "Select share destination '\(shareDestination)'",
+                "Select '\(shareDestination)'",
                 app: "Final Cut Pro",
                 buttonTitled: shareDestination,
-                fallback: nil,
                 delay: 0.5
             ),
 
-            // 4. Click "Next…" in the sheet
+            // 4. Advance through the sheet.
+            //    Title TBD — will be "Next…" or "Save" depending on sheet step.
+            //    Update after running: scripts/discover_ax_elements.py --app "Final Cut Pro" --title next
             .click(
-                "Click Next",
+                "Click Next / Save",
                 app: "Final Cut Pro",
                 buttonTitled: "Next",
+                fallback: nil,
                 delay: 0.5
             ),
         ]

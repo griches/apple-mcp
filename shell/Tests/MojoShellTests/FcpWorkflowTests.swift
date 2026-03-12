@@ -50,9 +50,15 @@ final class FcpWorkflowTests: XCTestCase {
         // First step activates FCP deterministically — not cmd+tab
         XCTAssertEqual(steps.first?.appActivationName, "Final Cut Pro")
         XCTAssertNil(steps.first?.keypress)
+        // Second step: toolbar Share button (verified live AX title)
         XCTAssertEqual(
             steps.dropFirst().first?.axQuery?.titleContaining,
             "Share the project, event clip, or Timeline range"
+        )
+        // Default share destination is the verified File > Share submenu name
+        XCTAssertEqual(
+            steps.dropFirst(2).first?.axQuery?.titleContaining,
+            "Export File (default)…"
         )
     }
 
