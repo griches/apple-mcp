@@ -31,8 +31,10 @@ struct ProductionDashboardView: View {
             errorMessage: nil
         ),
     ]
-    @State private var workflowLog = "Configure MOJOSHELL_ASSEMBLY_CLICK_TARGET=x,y to run a real assembly action."
+    @State private var workflowLog = "Ready. Use 'Discover FCP Elements' first to verify accessibility access, then 'Run Assembly Workflow' to trigger the share dialog."
     @State private var isRunningWorkflow = false
+    @State private var discoveredElements: [FoundAXElement] = []
+    @State private var isDiscovering = false
 
     var body: some View {
         HSplitView {
@@ -51,11 +53,39 @@ struct ProductionDashboardView: View {
                 Label("FCP / Motion", systemImage: "film.stack")
                     .font(.headline)
                 Divider()
-                Text("Computer-use provider: \(appState.computerUseProviderName)")
-                    .foregroundStyle(.secondary)
-                Text("Phase 1 uses coordinate-driven computer use. Configure the assembly click target before running a live action.")
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
+                HStack {
+                    Text("Provider: \(appState.computerUseProviderName)")
+                    Spacer()
+                    Button(isDiscovering ? "Scanning..." : "Discover FCP Elements") {
+                        Task { await discoverFcpElements() }
+                    }
+                    .disabled(isDiscovering)
+                }
+                .foregroundStyle(.secondary)
+
+                if !discoveredElements.isEmpty {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(discoveredElements) { element in
+                                HStack(spacing: 8) {
+                                    Text("\(Int(element.screenPoint.x)),\(Int(element.screenPoint.y))")
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 90, alignment: .leading)
+                                    Text(element.title.isEmpty ? "(untitled)" : element.title)
+                                        .font(.caption)
+                                    Spacer()
+                                    Text(element.role)
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Final Cut Pro — \(discoveredElements.count) elements", systemImage: "list.bullet.rectangle.portrait")
+                    }
+                }
+
                 Divider()
                 ScrollView {
                     Text(workflowLog)
@@ -64,9 +94,7 @@ struct ProductionDashboardView: View {
                 }
                 Spacer()
                 Button(isRunningWorkflow ? "Running..." : "Run Assembly Workflow") {
-                    Task {
-                        await runAssemblyWorkflow()
-                    }
+                    Task { await runAssemblyWorkflow() }
                 }
                 .disabled(isRunningWorkflow)
             }
@@ -74,6 +102,20 @@ struct ProductionDashboardView: View {
             .frame(minWidth: 280)
         }
         .navigationTitle("Production")
+    }
+
+    private func discoverFcpElements() async {
+        isDiscovering = true
+        workflowLog = "Scanning Final Cut Pro accessibility tree…"
+        do {
+            let elements = try AccessibilityElementFinder.findButtons(inApp: "Final Cut Pro")
+            discoveredElements = elements
+            workflowLog = "Found \(elements.count) buttons in Final Cut Pro. Coordinates are in global screen space (origin = top-left of primary display)."
+        } catch {
+            workflowLog = "Discovery error: \(error.localizedDescription)"
+            discoveredElements = []
+        }
+        isDiscovering = false
     }
 
     private func runAssemblyWorkflow() async {
@@ -85,17 +127,25 @@ struct ProductionDashboardView: View {
         isRunningWorkflow = true
         jobs[queuedIndex].status = .running
         jobs[queuedIndex].progress = 0.15
+        workflowLog = "Starting assembly workflow…"
 
-        let jobName = jobs[queuedIndex].name
-        let result = await appState.runAssemblyWorkflow(jobName: jobName)
+        do {
+            let sessionId = try await appState.computerUseProvider.startSession()
+            let steps = FcpWorkflowDefinition.assemblyWorkflow()
+            let executor = WorkflowExecutor(provider: appState.computerUseProvider)
 
-        switch result {
-        case .success(let output):
+            try await executor.run(steps: steps, sessionId: sessionId) { [self] message in
+                // @MainActor not automatically captured in closure — update on main
+                Task { @MainActor in
+                    workflowLog = message
+                }
+            }
+
+            try await appState.computerUseProvider.stopSession(sessionId: sessionId)
             jobs[queuedIndex].status = .completed
             jobs[queuedIndex].progress = 1.0
             jobs[queuedIndex].completedAt = Date()
-            workflowLog = output
-        case .failure(let error):
+        } catch {
             jobs[queuedIndex].status = .failed
             jobs[queuedIndex].errorMessage = error.localizedDescription
             workflowLog = "Error: \(error.localizedDescription)"
