@@ -4,6 +4,7 @@ struct AuditView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var audit: AuditController
     @State private var selectedCategory: AuditCategory?
+    @State private var query = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -11,6 +12,9 @@ struct AuditView: View {
                 Label("Operator Audit", systemImage: "clock.arrow.circlepath")
                     .font(.headline)
                 Spacer()
+                TextField("Search", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 240)
                 Picker("Category", selection: $selectedCategory) {
                     Text("All").tag(Optional<AuditCategory>.none)
                     ForEach(AuditCategory.allCases, id: \.self) { category in
@@ -18,6 +22,12 @@ struct AuditView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                Button("Reveal Log") {
+                    Task { _ = await appState.revealFinderPath(audit.filePath) }
+                }
+                Button("Clear") {
+                    audit.clear()
+                }
                 Button("Refresh") {
                     audit.refresh()
                 }
@@ -61,10 +71,22 @@ struct AuditView: View {
     }
 
     private var filteredEvents: [AuditEvent] {
-        guard let selectedCategory else {
-            return audit.events
+        let categoryFiltered = selectedCategory.map { category in
+            audit.events.filter { $0.category == category }
+        } ?? audit.events
+
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else {
+            return categoryFiltered
         }
-        return audit.events.filter { $0.category == selectedCategory }
+
+        return categoryFiltered.filter { event in
+            event.title.lowercased().contains(trimmed)
+                || event.detail.lowercased().contains(trimmed)
+                || event.metadata.contains(where: { key, value in
+                    key.lowercased().contains(trimmed) || value.lowercased().contains(trimmed)
+                })
+        }
     }
 }
 

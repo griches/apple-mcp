@@ -56,12 +56,14 @@ actor NativeToolExecutor: NativeToolExecuting {
     static let serverName = "shell-native"
 
     private let repoRoot: String
+    private let brainPathProvider: @MainActor () -> String
     private let appleAutomation: any AppleAutomationProviding
     private let commandRunner: @Sendable (String, [String], String?) async throws -> String
     private let urlOpener: @Sendable (URL) async -> Bool
 
     init(
         repoRoot: String,
+        brainPathProvider: (@MainActor () -> String)? = nil,
         appleAutomation: (any AppleAutomationProviding)? = nil,
         commandRunner: @escaping @Sendable (String, [String], String?) async throws -> String = NativeToolExecutor.defaultCommandRunner,
         urlOpener: @escaping @Sendable (URL) async -> Bool = { url in
@@ -69,6 +71,9 @@ actor NativeToolExecutor: NativeToolExecuting {
         }
     ) {
         self.repoRoot = repoRoot
+        self.brainPathProvider = brainPathProvider ?? {
+            "\(repoRoot)/knowledge-corpus/data/mojosolo_operating_brain.json"
+        }
         self.appleAutomation = appleAutomation ?? AppleScriptAutomationAdapter()
         self.commandRunner = commandRunner
         self.urlOpener = urlOpener
@@ -76,6 +81,7 @@ actor NativeToolExecutor: NativeToolExecuting {
 
     init(
         repoRoot: String,
+        brainPathProvider: (@MainActor () -> String)? = nil,
         appleScriptRunner: @escaping @Sendable (String) async throws -> String,
         commandRunner: @escaping @Sendable (String, [String], String?) async throws -> String = NativeToolExecutor.defaultCommandRunner,
         urlOpener: @escaping @Sendable (URL) async -> Bool = { url in
@@ -84,6 +90,7 @@ actor NativeToolExecutor: NativeToolExecuting {
     ) {
         self.init(
             repoRoot: repoRoot,
+            brainPathProvider: brainPathProvider,
             appleAutomation: ScriptBackedAppleAutomation(scriptRunner: appleScriptRunner),
             commandRunner: commandRunner,
             urlOpener: urlOpener
@@ -115,7 +122,7 @@ actor NativeToolExecutor: NativeToolExecuting {
             return result(tool: tool, text: "Revealed in Finder: \(expanded)")
 
         case .finderRevealBrainFile:
-            let path = "\(repoRoot)/knowledge-corpus/data/mojosolo_operating_brain.json"
+            let path = expandPath(await MainActor.run { brainPathProvider() })
             try ensurePathExists(path)
             try await appleAutomation.revealFinderPath(path)
             return result(tool: tool, text: "Revealed brain file in Finder: \(path)")

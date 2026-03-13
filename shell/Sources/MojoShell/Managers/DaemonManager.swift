@@ -3,7 +3,20 @@ import Foundation
 
 struct MCPServerDefinition: Equatable {
     let name: String
+    let directoryPath: String
     let scriptPath: String
+
+    var packagePath: String {
+        "\(directoryPath)/package.json"
+    }
+
+    var buildCommand: [String] {
+        ["npm", "run", "build"]
+    }
+
+    var buildCommandDescription: String {
+        buildCommand.joined(separator: " ")
+    }
 }
 
 enum DaemonRuntimeStatus: String, Equatable {
@@ -21,6 +34,7 @@ struct DaemonRuntimeState: Identifiable, Equatable {
     let status: DaemonRuntimeStatus
     let pid: Int32?
     let lastError: String?
+    let logPath: String
     let updatedAt: Date
 
     init(
@@ -29,6 +43,7 @@ struct DaemonRuntimeState: Identifiable, Equatable {
         status: DaemonRuntimeStatus,
         pid: Int32? = nil,
         lastError: String? = nil,
+        logPath: String,
         updatedAt: Date = Date()
     ) {
         self.id = serverName
@@ -37,6 +52,7 @@ struct DaemonRuntimeState: Identifiable, Equatable {
         self.status = status
         self.pid = pid
         self.lastError = lastError
+        self.logPath = logPath
         self.updatedAt = updatedAt
     }
 }
@@ -45,16 +61,27 @@ struct DaemonRuntimeState: Identifiable, Equatable {
 final class DaemonManager: ObservableObject {
     @Published private(set) var runningServers: [String: Process] = [:]
     @Published private(set) var runtimeStates: [String: DaemonRuntimeState] = [:]
+    @Published private(set) var buildStates: [String: DaemonBuildState] = [:]
+    @Published private(set) var runtimeLogSnippets: [String: String] = [:]
 
     let repoRoot: String
+    private let logStore: DaemonLogStore
+    private let brainPathProvider: @MainActor () -> String?
     private let onRuntimeStateChanged: @MainActor (DaemonRuntimeState?, DaemonRuntimeState) -> Void
+    private let buildOperation: @Sendable (MCPServerDefinition) async throws -> DaemonBuildResult
 
     init(
         repoRoot: String = DaemonManager.defaultRepoRoot(),
-        onRuntimeStateChanged: @escaping @MainActor (DaemonRuntimeState?, DaemonRuntimeState) -> Void = { _, _ in }
+        logStore: DaemonLogStore = DaemonLogStore(),
+        brainPathProvider: @escaping @MainActor () -> String? = { nil },
+        onRuntimeStateChanged: @escaping @MainActor (DaemonRuntimeState?, DaemonRuntimeState) -> Void = { _, _ in },
+        buildOperation: (@Sendable (MCPServerDefinition) async throws -> DaemonBuildResult)? = nil
     ) {
         self.repoRoot = repoRoot
+        self.logStore = logStore
+        self.brainPathProvider = brainPathProvider
         self.onRuntimeStateChanged = onRuntimeStateChanged
+        self.buildOperation = buildOperation ?? DaemonManager.defaultBuildOperation
         refreshRuntimeStates()
     }
 
@@ -73,9 +100,11 @@ final class DaemonManager: ObservableObject {
         ]
 
         return mapping.map { entry in
-            MCPServerDefinition(
+            let directoryPath = "\(repoRoot)/\(entry.directory)"
+            return MCPServerDefinition(
                 name: entry.name,
-                scriptPath: "\(repoRoot)/\(entry.directory)/build/index.js"
+                directoryPath: directoryPath,
+                scriptPath: "\(directoryPath)/build/index.js"
             )
         }
     }
@@ -83,6 +112,12 @@ final class DaemonManager: ObservableObject {
     var allRuntimeStates: [DaemonRuntimeState] {
         serverDefinitions
             .map { runtimeStates[$0.name] ?? defaultRuntimeState(for: $0) }
+            .sorted { $0.serverName < $1.serverName }
+    }
+
+    var allBuildStates: [DaemonBuildState] {
+        serverDefinitions
+            .map { buildStates[$0.name] ?? defaultBuildState(for: $0) }
             .sorted { $0.serverName < $1.serverName }
     }
 
@@ -103,7 +138,12 @@ final class DaemonManager: ObservableObject {
             return
         }
 
+        appendRuntimeLog("Stopping \(serverName)\n", serverName: serverName)
+
         if let process = runningServers[serverName], process.isRunning {
+            if let stderr = process.standardError as? Pipe {
+                stderr.fileHandleForReading.readabilityHandler = nil
+            }
             process.terminate()
         }
         runningServers.removeValue(forKey: serverName)
@@ -131,12 +171,118 @@ final class DaemonManager: ObservableObject {
         }
     }
 
+    func build(serverName: String) async {
+        guard let definition = serverDefinitions.first(where: { $0.name == serverName }) else {
+            return
+        }
+
+        let previous = buildStates[definition.name] ?? defaultBuildState(for: definition)
+        guard previous.status != .building else {
+            return
+        }
+
+        do {
+            try logStore.reset(serverName: definition.name, kind: .build)
+        } catch {
+            // Best effort only.
+        }
+
+        let startedAt = Date()
+        setBuildState(
+            DaemonBuildState(
+                serverName: definition.name,
+                status: .building,
+                command: definition.buildCommandDescription,
+                logPath: logStore.logURL(for: definition.name, kind: .build).path,
+                lastOutput: "Building \(definition.name)...",
+                startedAt: startedAt,
+                finishedAt: nil,
+                lastExitCode: nil
+            )
+        )
+        appendBuildLog("$ \(definition.buildCommandDescription)\n", serverName: definition.name)
+
+        do {
+            let result = try await buildOperation(definition)
+            appendBuildLog(result.output, serverName: definition.name)
+
+            let artifactExists = FileManager.default.fileExists(atPath: definition.scriptPath)
+            let finishedAt = Date()
+            if result.exitStatus == 0 && artifactExists {
+                setBuildState(
+                    DaemonBuildState(
+                        serverName: definition.name,
+                        status: .succeeded,
+                        command: definition.buildCommandDescription,
+                        logPath: logStore.logURL(for: definition.name, kind: .build).path,
+                        lastOutput: Self.tailSnippet(result.output, fallback: "Build succeeded."),
+                        startedAt: startedAt,
+                        finishedAt: finishedAt,
+                        lastExitCode: result.exitStatus
+                    )
+                )
+            } else {
+                let failureOutput = result.exitStatus == 0
+                    ? result.output + "\nBuild finished without producing build/index.js."
+                    : result.output
+                setBuildState(
+                    DaemonBuildState(
+                        serverName: definition.name,
+                        status: .failed,
+                        command: definition.buildCommandDescription,
+                        logPath: logStore.logURL(for: definition.name, kind: .build).path,
+                        lastOutput: Self.tailSnippet(failureOutput, fallback: "Build failed."),
+                        startedAt: startedAt,
+                        finishedAt: finishedAt,
+                        lastExitCode: result.exitStatus == 0 ? 1 : result.exitStatus
+                    )
+                )
+            }
+        } catch {
+            let finishedAt = Date()
+            let message = error.localizedDescription
+            appendBuildLog(message + "\n", serverName: definition.name)
+            setBuildState(
+                DaemonBuildState(
+                    serverName: definition.name,
+                    status: .failed,
+                    command: definition.buildCommandDescription,
+                    logPath: logStore.logURL(for: definition.name, kind: .build).path,
+                    lastOutput: Self.tailSnippet(message, fallback: "Build failed."),
+                    startedAt: startedAt,
+                    finishedAt: finishedAt,
+                    lastExitCode: 1
+                )
+            )
+        }
+
+        refreshRuntimeStates()
+    }
+
+    func buildAll() async {
+        for definition in serverDefinitions {
+            await build(serverName: definition.name)
+        }
+    }
+
     func process(for serverName: String) -> Process? {
         runningServers[serverName]
     }
 
     func runtimeState(for serverName: String) -> DaemonRuntimeState? {
         runtimeStates[serverName]
+    }
+
+    func buildState(for serverName: String) -> DaemonBuildState? {
+        buildStates[serverName]
+    }
+
+    func recentRuntimeLog(for serverName: String) -> String {
+        runtimeLogSnippets[serverName] ?? ""
+    }
+
+    func logPath(for serverName: String, kind: DaemonLogKind) -> String {
+        logStore.logURL(for: serverName, kind: kind).path
     }
 
     func ensureProcess(for serverName: String) -> Process? {
@@ -198,6 +344,7 @@ final class DaemonManager: ObservableObject {
 
         guard FileManager.default.fileExists(atPath: definition.scriptPath) else {
             print("[DaemonManager] Missing build artifact: \(definition.scriptPath)")
+            appendRuntimeLog("Missing build artifact: \(definition.scriptPath)\n", serverName: definition.name)
             setRuntimeState(
                 for: definition,
                 status: .notBuilt,
@@ -207,6 +354,13 @@ final class DaemonManager: ObservableObject {
             return
         }
 
+        do {
+            try logStore.reset(serverName: definition.name, kind: .runtime)
+        } catch {
+            // Best effort only.
+        }
+
+        appendRuntimeLog("Starting \(definition.name)\n", serverName: definition.name)
         setRuntimeState(for: definition, status: .starting, pid: nil, lastError: nil)
 
         let process = Process()
@@ -216,12 +370,26 @@ final class DaemonManager: ObservableObject {
 
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["node", definition.scriptPath]
+        process.environment = processEnvironment()
         process.standardInput = stdin
         process.standardOutput = stdout
         process.standardError = stderr
+        stderr.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                return
+            }
+            let chunk = String(decoding: data, as: UTF8.self)
+            Task { @MainActor [weak self] in
+                self?.appendRuntimeLog(chunk, serverName: definition.name)
+            }
+        }
         process.terminationHandler = { [weak self] process in
             Task { @MainActor in
                 guard let self else { return }
+                if let stderr = process.standardError as? Pipe {
+                    stderr.fileHandleForReading.readabilityHandler = nil
+                }
                 self.runningServers.removeValue(forKey: definition.name)
 
                 let status: DaemonRuntimeStatus
@@ -229,9 +397,11 @@ final class DaemonManager: ObservableObject {
                 if process.terminationReason == .exit && process.terminationStatus == 0 {
                     status = .stopped
                     errorMessage = nil
+                    self.appendRuntimeLog("Exited cleanly.\n", serverName: definition.name)
                 } else {
                     status = .failed
                     errorMessage = "Exited with status \(process.terminationStatus)"
+                    self.appendRuntimeLog("Exited with status \(process.terminationStatus).\n", serverName: definition.name)
                 }
 
                 self.setRuntimeState(
@@ -246,6 +416,7 @@ final class DaemonManager: ObservableObject {
         do {
             try process.run()
             runningServers[definition.name] = process
+            appendRuntimeLog("Started pid \(process.processIdentifier).\n", serverName: definition.name)
             setRuntimeState(
                 for: definition,
                 status: .running,
@@ -254,6 +425,7 @@ final class DaemonManager: ObservableObject {
             )
             print("[DaemonManager] Started \(definition.name) (pid \(process.processIdentifier))")
         } catch {
+            appendRuntimeLog("Failed to start: \(error.localizedDescription)\n", serverName: definition.name)
             setRuntimeState(
                 for: definition,
                 status: .failed,
@@ -262,6 +434,36 @@ final class DaemonManager: ObservableObject {
             )
             print("[DaemonManager] Failed to start \(definition.name): \(error)")
         }
+    }
+
+    private func processEnvironment() -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        if let brainPath = brainPathProvider()?.trimmingCharacters(in: .whitespacesAndNewlines), !brainPath.isEmpty {
+            environment["BRAIN_PATH"] = brainPath
+        }
+        return environment
+    }
+
+    private func appendRuntimeLog(_ text: String, serverName: String) {
+        do {
+            try logStore.append(text, serverName: serverName, kind: .runtime)
+        } catch {
+            // Runtime log capture is best effort only.
+        }
+        let combined = (runtimeLogSnippets[serverName] ?? "") + text
+        runtimeLogSnippets[serverName] = Self.tailSnippet(combined, fallback: "")
+    }
+
+    private func appendBuildLog(_ text: String, serverName: String) {
+        do {
+            try logStore.append(text, serverName: serverName, kind: .build)
+        } catch {
+            // Build log capture is best effort only.
+        }
+    }
+
+    private func setBuildState(_ state: DaemonBuildState) {
+        buildStates[state.serverName] = state
     }
 
     private func setRuntimeState(
@@ -276,7 +478,8 @@ final class DaemonManager: ObservableObject {
             scriptPath: definition.scriptPath,
             status: status,
             pid: pid,
-            lastError: lastError
+            lastError: lastError,
+            logPath: logStore.logURL(for: definition.name, kind: .runtime).path
         )
         runtimeStates[definition.name] = next
 
@@ -305,17 +508,28 @@ final class DaemonManager: ObservableObject {
             scriptPath: definition.scriptPath,
             status: artifactExists ? .stopped : .notBuilt,
             pid: nil,
-            lastError: artifactExists ? nil : "Missing build artifact"
+            lastError: artifactExists ? nil : "Missing build artifact",
+            logPath: logStore.logURL(for: definition.name, kind: .runtime).path
         )
     }
 
-    private static func defaultRepoRoot() -> String {
+    private func defaultBuildState(for definition: MCPServerDefinition) -> DaemonBuildState {
+        DaemonBuildState(
+            serverName: definition.name,
+            status: .idle,
+            command: definition.buildCommandDescription,
+            logPath: logStore.logURL(for: definition.name, kind: .build).path,
+            lastOutput: "No build run recorded yet."
+        )
+    }
+
+    static func defaultRepoRoot() -> String {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // Managers
-            .deletingLastPathComponent() // MojoShell
-            .deletingLastPathComponent() // Sources
-            .deletingLastPathComponent() // shell
-            .deletingLastPathComponent() // repo root
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
             .path
     }
 
@@ -327,5 +541,53 @@ final class DaemonManager: ObservableObject {
         return previous.status != next.status
             || previous.pid != next.pid
             || previous.lastError != next.lastError
+    }
+
+    private static func tailSnippet(_ text: String, fallback: String) -> String {
+        let lines = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .suffix(8)
+            .map(String.init)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return lines.isEmpty ? fallback : lines
+    }
+
+    private static func defaultBuildOperation(_ definition: MCPServerDefinition) async throws -> DaemonBuildResult {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                let stdout = Pipe()
+                let stderr = Pipe()
+
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = definition.buildCommand
+                process.currentDirectoryURL = URL(fileURLWithPath: definition.directoryPath)
+                process.standardOutput = stdout
+                process.standardError = stderr
+
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+
+                    let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
+                    let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+                    let stdoutText = String(decoding: stdoutData, as: UTF8.self)
+                    let stderrText = String(decoding: stderrData, as: UTF8.self)
+                    let combined = [stdoutText, stderrText]
+                        .filter { !$0.isEmpty }
+                        .joined(separator: stdoutText.isEmpty || stderrText.isEmpty ? "" : "\n")
+
+                    continuation.resume(
+                        returning: DaemonBuildResult(
+                            output: combined,
+                            exitStatus: process.terminationStatus
+                        )
+                    )
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 }

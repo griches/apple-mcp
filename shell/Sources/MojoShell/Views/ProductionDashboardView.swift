@@ -59,6 +59,9 @@ struct ProductionDashboardView: View {
                             Button("Queue Workflow") {
                                 queueSelectedWorkflow()
                             }
+                            Button("Clear Finished") {
+                                production.clearFinishedJobs()
+                            }
 
                             Button("Set Default Target") {
                                 setSelectedDefaultTarget()
@@ -259,6 +262,35 @@ struct ProductionDashboardView: View {
                             Text("Approval policy: \(selectedJob.approvalMode.title)")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+
+                            HStack {
+                                if selectedJob.status == .failed || selectedJob.status == .canceled {
+                                    Button("Retry") {
+                                        production.retryFailedJob(id: selectedJob.id)
+                                    }
+                                }
+                                Button("Duplicate") {
+                                    production.duplicateJob(id: selectedJob.id)
+                                }
+                                if selectedJob.status == .queued {
+                                    Button("Prioritize") {
+                                        production.prioritizeQueuedJob(id: selectedJob.id)
+                                    }
+                                    Button("Cancel") {
+                                        production.cancelQueuedJob(id: selectedJob.id)
+                                    }
+                                }
+                                if selectedJob.status != .running {
+                                    Button("Remove") {
+                                        let removedID = selectedJob.id
+                                        production.removeJob(id: removedID)
+                                        if selectedJobID == removedID {
+                                            selectedJobID = production.jobs.first?.id
+                                        }
+                                    }
+                                }
+                            }
+                            .font(.caption)
 
                             if let targetPath = selectedJob.exportTargetPath {
                                 HStack {

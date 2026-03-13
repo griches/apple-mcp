@@ -100,6 +100,10 @@ final class AuditController: ObservableObject {
         load()
     }
 
+    var filePath: String {
+        store.fileURL.path
+    }
+
     func record(
         category: AuditCategory,
         title: String,
@@ -133,6 +137,22 @@ final class AuditController: ObservableObject {
 
     func refresh() {
         load()
+    }
+
+    func clear() {
+        do {
+            try store.save([])
+            events = []
+        } catch {
+            events = [
+                AuditEvent(
+                    timestamp: now(),
+                    category: .system,
+                    title: "Audit clear failure",
+                    detail: error.localizedDescription
+                ),
+            ]
+        }
     }
 
     private func load() {

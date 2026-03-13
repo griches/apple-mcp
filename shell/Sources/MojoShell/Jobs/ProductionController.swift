@@ -157,6 +157,89 @@ final class ProductionController: ObservableObject {
         recordEvent(jobID: id, type: .queued, message: "Job requeued for retry", progress: 0.0)
     }
 
+    func cancelQueuedJob(id: UUID) {
+        guard let index = jobs.firstIndex(where: { $0.id == id && $0.status == .queued }) else {
+            return
+        }
+
+        jobs[index].status = .canceled
+        jobs[index].completedAt = now()
+        jobs[index].errorMessage = "Canceled before run."
+        persistJobs()
+        recordEvent(jobID: id, type: .canceled, message: "Queued job canceled before run")
+    }
+
+    func duplicateJob(id: UUID) {
+        guard let original = jobs.first(where: { $0.id == id }) else {
+            return
+        }
+
+        let copy = MediaJob(
+            name: "\(original.name) Copy",
+            client: original.client,
+            status: .queued,
+            progress: 0.0,
+            createdAt: now(),
+            completedAt: nil,
+            errorMessage: nil,
+            workflowPreset: original.workflowPreset,
+            appTarget: original.appTarget,
+            exportTargetName: original.exportTargetName,
+            exportTargetPath: original.exportTargetPath,
+            sourceAssets: original.sourceAssets,
+            notes: original.notes,
+            workflowVersion: original.workflowVersion,
+            approvalMode: original.approvalMode
+        )
+
+        jobs.insert(copy, at: 0)
+        persistJobs()
+        recordEvent(jobID: copy.id, type: .queued, message: "Job duplicated from \(original.name)", progress: 0.0)
+    }
+
+    func prioritizeQueuedJob(id: UUID) {
+        guard let index = jobs.firstIndex(where: { $0.id == id && $0.status == .queued }) else {
+            return
+        }
+
+        let job = jobs.remove(at: index)
+        jobs.insert(job, at: 0)
+        persistJobs()
+        recordEvent(jobID: id, type: .info, message: "Queued job moved to front")
+    }
+
+    func removeJob(id: UUID) {
+        guard let index = jobs.firstIndex(where: { $0.id == id && $0.status != .running }) else {
+            return
+        }
+
+        let removed = jobs.remove(at: index)
+        persistJobs()
+        auditRecorder(
+            .production,
+            "Job removed",
+            removed.name,
+            ["job_id": removed.id.uuidString, "status": removed.status.rawValue]
+        )
+    }
+
+    func clearFinishedJobs() {
+        let retained = jobs.filter { $0.status == .queued || $0.status == .running }
+        guard retained.count != jobs.count else {
+            return
+        }
+
+        let removedCount = jobs.count - retained.count
+        jobs = retained
+        persistJobs()
+        auditRecorder(
+            .production,
+            "Finished jobs cleared",
+            "Removed \(removedCount) completed, failed, or canceled jobs.",
+            ["removed_count": "\(removedCount)"]
+        )
+    }
+
     func addExportTarget(name: String, path: String) throws {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPath = (path as NSString).expandingTildeInPath.trimmingCharacters(in: .whitespacesAndNewlines)

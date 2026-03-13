@@ -90,6 +90,8 @@ private struct StatusDotView: View {
 
 struct CockpitView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var brain: BrainManager
+    @EnvironmentObject private var readiness: ReadinessState
     @State private var scanResult = "Tap Scan to load Daily Intel"
     @State private var personaMapResult = ""
     @State private var parsedPersonas: [PersonaCardData] = []
@@ -105,6 +107,8 @@ struct CockpitView: View {
     @State private var hasLoadedInitialPanels = false
     @State private var operatorResult = "Finder, Safari, Terminal, iTerm, Preview, Photos, Shortcuts, and settings controls are ready."
     @State private var isRunningOperatorAction = false
+    @State private var isRunningBrainAction = false
+    @State private var isRunningDaemonAction = false
 
     var body: some View {
         HSplitView {
@@ -155,6 +159,26 @@ struct CockpitView: View {
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
+                        Text(brain.sourceMode.title)
+                            .font(.system(.body, design: .rounded).bold())
+                        Text(brain.activeBrainPath)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+
+                        HStack {
+                            Button("Use Repo") {
+                                Task { await switchToRepoBrain() }
+                            }
+                            Button("Use Local") {
+                                Task { await switchToLocalBrain() }
+                            }
+                            Button("Reveal") {
+                                Task { await runOperatorAction(appState.revealBrainFile) }
+                            }
+                        }
+                        .disabled(isRunningBrainAction || isRunningOperatorAction)
+
                         if let parsedBrainOverview {
                             Text(parsedBrainOverview.headline)
                                 .font(.system(.body, design: .rounded).bold())
@@ -197,7 +221,7 @@ struct CockpitView: View {
                                 await loadBrainOverview()
                             }
                         }
-                        .disabled(isLoadingBrainOverview)
+                        .disabled(isLoadingBrainOverview || isRunningBrainAction)
                     }
                 } label: {
                     Label("Brain", systemImage: "brain.head.profile")
@@ -308,34 +332,73 @@ struct CockpitView: View {
                     Label("Daemon Health", systemImage: "server.rack")
                         .font(.headline)
                     Spacer()
+                    Button("Build All") {
+                        Task { await runDaemonBuildAll() }
+                    }
+                    .disabled(isRunningDaemonAction)
                     Button("Restart All") {
                         appState.daemons.restartAll()
                     }
+                    .disabled(isRunningDaemonAction)
                 }
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(appState.daemons.allRuntimeStates) { state in
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(daemonStatusColor(state.status))
-                                    .frame(width: 8, height: 8)
-                                Text(state.serverName)
-                                    .font(.system(.body, design: .monospaced))
-                                Text(state.status.rawValue)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(daemonStatusColor(state.status))
+                                        .frame(width: 8, height: 8)
+                                    Text(state.serverName)
+                                        .font(.system(.body, design: .monospaced))
+                                    Text(state.status.rawValue)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    let buildState = appState.daemons.buildState(for: state.serverName)
+                                    Text(buildState?.status.rawValue ?? DaemonBuildStatus.idle.rawValue)
+                                        .font(.caption2)
+                                        .foregroundStyle(buildStatusColor(buildState?.status ?? .idle))
+                                    Spacer()
+                                    Button("Build") {
+                                        Task { await runDaemonBuild(state.serverName) }
+                                    }
+                                    .disabled(isRunningDaemonAction)
+                                    Button("Restart") {
+                                        appState.daemons.restart(serverName: state.serverName)
+                                    }
+                                    .disabled(isRunningDaemonAction)
+                                    Button("Log") {
+                                        Task { _ = await appState.revealFinderPath(state.logPath) }
+                                    }
+                                    Button("Script") {
+                                        Task { _ = await appState.revealFinderPath(state.scriptPath) }
+                                    }
+                                }
+
                                 if let error = state.lastError, !error.isEmpty {
                                     Text(error)
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
-                                        .lineLimit(1)
+                                        .lineLimit(2)
                                 }
-                                Spacer()
-                                Button("Restart") {
-                                    appState.daemons.restart(serverName: state.serverName)
+
+                                if let buildState = appState.daemons.buildState(for: state.serverName) {
+                                    Text(buildState.lastOutput)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(4)
+                                }
+
+                                let runtimeSnippet = appState.daemons.recentRuntimeLog(for: state.serverName)
+                                if !runtimeSnippet.isEmpty {
+                                    Text(runtimeSnippet)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(4)
                                 }
                             }
+                            .padding(.vertical, 4)
                         }
                     }
                 }
@@ -375,6 +438,19 @@ struct CockpitView: View {
             return .gray
         case .notBuilt:
             return .orange
+        case .failed:
+            return .red
+        }
+    }
+
+    private func buildStatusColor(_ status: DaemonBuildStatus) -> Color {
+        switch status {
+        case .idle:
+            return .secondary
+        case .building:
+            return .blue
+        case .succeeded:
+            return .green
         case .failed:
             return .red
         }
@@ -456,5 +532,47 @@ struct CockpitView: View {
         case .failure(let error):
             operatorResult = "Error: \(error.localizedDescription)"
         }
+    }
+
+    private func switchToRepoBrain() async {
+        guard !isRunningBrainAction else { return }
+        isRunningBrainAction = true
+        defer { isRunningBrainAction = false }
+
+        brain.useRepoDefault()
+        appState.daemons.restart(serverName: "knowledge-corpus")
+        await readiness.refresh()
+        await loadBrainOverview()
+        operatorResult = "Using repo brain: \(brain.activeBrainPath)"
+    }
+
+    private func switchToLocalBrain() async {
+        guard !isRunningBrainAction else { return }
+        isRunningBrainAction = true
+        defer { isRunningBrainAction = false }
+
+        do {
+            try brain.useLocalBrain()
+            appState.daemons.restart(serverName: "knowledge-corpus")
+            await readiness.refresh()
+            await loadBrainOverview()
+            operatorResult = "Using local brain: \(brain.activeBrainPath)"
+        } catch {
+            operatorResult = "Brain error: \(error.localizedDescription)"
+        }
+    }
+
+    private func runDaemonBuild(_ serverName: String) async {
+        guard !isRunningDaemonAction else { return }
+        isRunningDaemonAction = true
+        defer { isRunningDaemonAction = false }
+        await appState.daemons.build(serverName: serverName)
+    }
+
+    private func runDaemonBuildAll() async {
+        guard !isRunningDaemonAction else { return }
+        isRunningDaemonAction = true
+        defer { isRunningDaemonAction = false }
+        await appState.daemons.buildAll()
     }
 }

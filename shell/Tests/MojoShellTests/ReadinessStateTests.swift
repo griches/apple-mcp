@@ -46,6 +46,7 @@ private func makeState(
     repoRoot: String,
     defaults: UserDefaults = makeTestDefaults(),
     environment: [String: String] = [:],
+    brainPathProvider: @escaping @MainActor () -> String? = { nil },
     axGranted: Bool = true,
     screenRecordingGranted: Bool = true
 ) -> ReadinessState {
@@ -53,6 +54,7 @@ private func makeState(
         daemonManager: DaemonManager(repoRoot: repoRoot),
         defaults: defaults,
         environment: environment,
+        brainPathProvider: brainPathProvider,
         axCheck: { axGranted },
         screenRecordingCheck: { screenRecordingGranted }
     )
@@ -105,6 +107,25 @@ final class ReadinessStateCoreTests: XCTestCase {
         let state = makeState(
             repoRoot: repoRoot,
             environment: ["BRAIN_PATH": brainURL.path]
+        )
+
+        await state.refresh()
+
+        XCTAssertFalse(state.coreIssues.map(\.id).contains("brain_file"))
+    }
+
+    func testBrainPathProviderOverridesDefault() async {
+        let repoRoot = makeRepoRoot(createBrainFile: false, createArtifacts: true)
+        defer { try? FileManager.default.removeItem(atPath: repoRoot) }
+
+        let brainURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("provider-brain-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: brainURL) }
+        try! "{\"brain\":true}".data(using: .utf8)!.write(to: brainURL)
+
+        let state = makeState(
+            repoRoot: repoRoot,
+            brainPathProvider: { brainURL.path }
         )
 
         await state.refresh()

@@ -13,6 +13,7 @@ final class ReadinessState: ObservableObject {
     private let daemonManager: DaemonManager
     private let defaults: UserDefaults
     private let environment: [String: String]
+    private let brainPathProvider: @MainActor () -> String?
     private let axCheck: @Sendable () -> Bool
     private let screenRecordingCheck: @Sendable () -> Bool
 
@@ -20,12 +21,14 @@ final class ReadinessState: ObservableObject {
         daemonManager: DaemonManager,
         defaults: UserDefaults = .standard,
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        brainPathProvider: @escaping @MainActor () -> String? = { nil },
         axCheck: @escaping @Sendable () -> Bool = { AXIsProcessTrusted() },
         screenRecordingCheck: @escaping @Sendable () -> Bool = { CGPreflightScreenCaptureAccess() }
     ) {
         self.daemonManager = daemonManager
         self.defaults = defaults
         self.environment = environment
+        self.brainPathProvider = brainPathProvider
         self.axCheck = axCheck
         self.screenRecordingCheck = screenRecordingCheck
     }
@@ -181,6 +184,9 @@ final class ReadinessState: ObservableObject {
     }
 
     private func resolvedBrainPath() -> String {
+        if let provided = brainPathProvider()?.trimmingCharacters(in: .whitespacesAndNewlines), !provided.isEmpty {
+            return provided
+        }
         if let override = environment["BRAIN_PATH"], !override.isEmpty {
             return override
         }

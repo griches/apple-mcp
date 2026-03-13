@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarShellView: View {
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var brain: BrainManager
     @EnvironmentObject private var production: ProductionController
     @EnvironmentObject private var readiness: ReadinessState
     @EnvironmentObject private var session: ShellSessionController
@@ -41,6 +42,30 @@ struct MenuBarShellView: View {
 
             Button("Restart All Daemons") {
                 appState.daemons.restartAll()
+            }
+
+            Button("Build All Daemons") {
+                Task { await appState.daemons.buildAll() }
+            }
+
+            Divider()
+
+            Button("Use Repo Brain") {
+                brain.useRepoDefault()
+                appState.daemons.restart(serverName: "knowledge-corpus")
+            }
+
+            Button("Use Local Brain") {
+                do {
+                    try brain.useLocalBrain()
+                    appState.daemons.restart(serverName: "knowledge-corpus")
+                } catch {
+                    // Ignore here; readiness surface will show issues.
+                }
+            }
+
+            Button("Reveal Active Brain") {
+                Task { _ = await appState.revealBrainFile() }
             }
 
             if let target = production.defaultExportTarget {

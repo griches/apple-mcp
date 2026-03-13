@@ -21,4 +21,20 @@ final class AuditControllerTests: XCTestCase {
         XCTAssertEqual(loaded.first?.metadata["path"], "/tmp")
         XCTAssertEqual(controller.events.count, 2)
     }
+
+    func testClearRemovesPersistedAuditEvents() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-audit-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = AuditStore(fileURL: root.appendingPathComponent("audit.json"))
+        let controller = AuditController(store: store)
+
+        controller.record(category: .system, title: "Before clear", detail: "event")
+        controller.clear()
+
+        XCTAssertEqual(try store.load().count, 0)
+        XCTAssertEqual(controller.events.count, 0)
+    }
 }

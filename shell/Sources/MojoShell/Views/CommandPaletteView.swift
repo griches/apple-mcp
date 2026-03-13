@@ -14,6 +14,7 @@ struct CommandPaletteView: View {
 
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var audit: AuditController
+    @EnvironmentObject private var brain: BrainManager
     @EnvironmentObject private var production: ProductionController
     @EnvironmentObject private var session: ShellSessionController
 
@@ -117,6 +118,14 @@ struct CommandPaletteView: View {
                 appState.daemons.restartAll()
             },
             PaletteAction(
+                id: "build-all-daemons",
+                title: "Build All Daemons",
+                subtitle: "Run npm build for every MCP server package.",
+                keywords: ["daemon", "build", "mcp", "all"]
+            ) {
+                await appState.daemons.buildAll()
+            },
+            PaletteAction(
                 id: "run-next-workflow",
                 title: "Run Next Workflow",
                 subtitle: "Start the next queued production job.",
@@ -170,6 +179,15 @@ struct CommandPaletteView: View {
                 )
             },
             PaletteAction(
+                id: "clear-finished-jobs",
+                title: "Clear Finished Jobs",
+                subtitle: "Remove completed, failed, and canceled jobs from the active queue.",
+                keywords: ["jobs", "queue", "clear", "finished"]
+            ) {
+                selectedView = .production
+                production.clearFinishedJobs()
+            },
+            PaletteAction(
                 id: "open-downloads",
                 title: "Open Downloads in Finder",
                 subtitle: "Open the Downloads folder.",
@@ -184,6 +202,36 @@ struct CommandPaletteView: View {
                 keywords: ["finder", "repo"]
             ) {
                 _ = await appState.openRepoFolder()
+            },
+            PaletteAction(
+                id: "reveal-active-brain",
+                title: "Reveal Active Brain",
+                subtitle: "Show the current operating brain file in Finder.",
+                keywords: ["brain", "finder", "reveal"]
+            ) {
+                _ = await appState.revealBrainFile()
+            },
+            PaletteAction(
+                id: "use-repo-brain",
+                title: "Use Repo Brain",
+                subtitle: "Switch back to the repo-bundled brain file.",
+                keywords: ["brain", "repo", "default"]
+            ) {
+                brain.useRepoDefault()
+                appState.daemons.restart(serverName: "knowledge-corpus")
+            },
+            PaletteAction(
+                id: "use-local-brain",
+                title: "Use Local Brain",
+                subtitle: "Seed and switch to the user-local brain copy.",
+                keywords: ["brain", "local", "seed"]
+            ) {
+                do {
+                    try brain.useLocalBrain()
+                    appState.daemons.restart(serverName: "knowledge-corpus")
+                } catch {
+                    audit.record(category: .system, title: "Local brain switch failed", detail: error.localizedDescription)
+                }
             },
             PaletteAction(
                 id: "open-repo-terminal",
@@ -256,6 +304,14 @@ struct CommandPaletteView: View {
                 keywords: ["shortcuts", "list"]
             ) {
                 _ = await appState.listShortcuts()
+            },
+            PaletteAction(
+                id: "reveal-audit-log",
+                title: "Reveal Audit Log",
+                subtitle: "Open the persisted audit log location in Finder.",
+                keywords: ["audit", "log", "finder"]
+            ) {
+                _ = await appState.revealFinderPath(audit.filePath)
             },
         ]
 

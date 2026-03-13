@@ -196,6 +196,33 @@ final class NativeToolExecutorTests: XCTestCase {
             .object(["path": .string(fileURL.path), "application": .string("Preview")])
         )
     }
+
+    func testRevealBrainFileUsesInjectedActiveBrainPath() async throws {
+        let capture = ScriptCapture()
+        let brainURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).json")
+        try Data("{}".utf8).write(to: brainURL)
+        defer { try? FileManager.default.removeItem(at: brainURL) }
+
+        let executor = NativeToolExecutor(
+            repoRoot: "/tmp/apple-mcp",
+            brainPathProvider: { brainURL.path },
+            appleScriptRunner: { script in
+                await capture.record(script)
+                return ""
+            },
+            commandRunner: { _, _, _ in "" },
+            urlOpener: { _ in true }
+        )
+
+        let result = try await executor.execute(
+            tool: NativeToolName.finderRevealBrainFile.rawValue,
+            arguments: [:]
+        )
+
+        let script = await capture.scripts.first
+        XCTAssertTrue(script?.contains(brainURL.path) ?? false)
+        XCTAssertEqual(result.text, "Revealed brain file in Finder: \(brainURL.path)")
+    }
 }
 
 private actor ScriptCapture {

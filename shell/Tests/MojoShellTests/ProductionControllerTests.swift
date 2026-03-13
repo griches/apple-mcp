@@ -465,6 +465,116 @@ final class ProductionControllerTests: XCTestCase {
         XCTAssertEqual(events.first?.message, "one")
     }
 
+    func testDuplicateJobQueuesNewCopy() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: JobStore(fileURL: root.appendingPathComponent("jobs.json")),
+            eventStore: JobEventStore(fileURL: root.appendingPathComponent("events.json")),
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            stepsProvider: { [] }
+        )
+
+        controller.queueAssemblyJob(name: "Original", client: "QA")
+        let originalID = try XCTUnwrap(controller.jobs.first?.id)
+
+        controller.duplicateJob(id: originalID)
+
+        XCTAssertEqual(controller.jobs.count, 2)
+        XCTAssertEqual(controller.jobs.first?.status, .queued)
+        XCTAssertNotEqual(controller.jobs.first?.id, originalID)
+        XCTAssertTrue(controller.jobs.first?.name.contains("Copy") ?? false)
+    }
+
+    func testCancelQueuedJobMarksItCanceled() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: JobStore(fileURL: root.appendingPathComponent("jobs.json")),
+            eventStore: JobEventStore(fileURL: root.appendingPathComponent("events.json")),
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            stepsProvider: { [] }
+        )
+
+        controller.queueAssemblyJob(name: "Cancelable", client: "QA")
+        let jobID = try XCTUnwrap(controller.jobs.first?.id)
+
+        controller.cancelQueuedJob(id: jobID)
+
+        XCTAssertEqual(controller.jobs.first?.status, .canceled)
+        XCTAssertEqual(controller.jobs.first?.errorMessage, "Canceled before run.")
+    }
+
+    func testPrioritizeQueuedJobMovesItToFront() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: JobStore(fileURL: root.appendingPathComponent("jobs.json")),
+            eventStore: JobEventStore(fileURL: root.appendingPathComponent("events.json")),
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            stepsProvider: { [] }
+        )
+
+        controller.queueAssemblyJob(name: "First", client: "QA")
+        controller.queueAssemblyJob(name: "Second", client: "QA")
+
+        let secondID = try XCTUnwrap(controller.jobs.last?.id)
+        controller.prioritizeQueuedJob(id: secondID)
+
+        XCTAssertEqual(controller.jobs.first?.id, secondID)
+    }
+
+    func testRemoveAndClearFinishedJobsPruneQueue() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let jobStore = JobStore(fileURL: root.appendingPathComponent("jobs.json"))
+        let eventStore = JobEventStore(fileURL: root.appendingPathComponent("events.json"))
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: jobStore,
+            eventStore: eventStore,
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            stepsProvider: { [] }
+        )
+
+        controller.queueAssemblyJob(name: "Keep", client: "QA")
+        controller.queueAssemblyJob(name: "Remove", client: "QA")
+        let removeID = try XCTUnwrap(controller.jobs.last?.id)
+        controller.removeJob(id: removeID)
+
+        XCTAssertEqual(controller.jobs.count, 1)
+
+        guard let keepID = controller.jobs.first?.id else {
+            XCTFail("Expected remaining job")
+            return
+        }
+        controller.cancelQueuedJob(id: keepID)
+        controller.clearFinishedJobs()
+
+        XCTAssertEqual(controller.jobs.count, 0)
+        XCTAssertEqual(try jobStore.load().count, 0)
+        XCTAssertEqual(try eventStore.load().filter { $0.type == .canceled }.count, 1)
+    }
+
     private func waitUntil(
         timeoutIterations: Int = 100,
         condition: @escaping () -> Bool

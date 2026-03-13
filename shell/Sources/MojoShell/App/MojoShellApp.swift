@@ -5,6 +5,7 @@ import SwiftUI
 struct MojoShellApp: App {
     @StateObject private var appState: AppState
     @StateObject private var audit: AuditController
+    @StateObject private var brain: BrainManager
     @StateObject private var readiness: ReadinessState
     @StateObject private var production: ProductionController
     @StateObject private var session: ShellSessionController
@@ -13,7 +14,11 @@ struct MojoShellApp: App {
         let notifications = AppNotificationManager()
         let audit = AuditController()
         let session = ShellSessionController()
+        let repoRoot = DaemonManager.defaultRepoRoot()
+        let brain = BrainManager(repoRoot: repoRoot)
         let daemonManager = DaemonManager(
+            repoRoot: repoRoot,
+            brainPathProvider: { brain.activeBrainPath },
             onRuntimeStateChanged: { previous, current in
                 audit.record(
                     category: .daemon,
@@ -42,8 +47,12 @@ struct MojoShellApp: App {
             }
         )
         let computerUseProvider: any ComputerUseProvider = CuaComputerUseProvider()
-        let nativeExecutor: any NativeToolExecuting = NativeToolExecutor(repoRoot: daemonManager.repoRoot)
+        let nativeExecutor: any NativeToolExecuting = NativeToolExecutor(
+            repoRoot: daemonManager.repoRoot,
+            brainPathProvider: { brain.activeBrainPath }
+        )
         _audit = StateObject(wrappedValue: audit)
+        _brain = StateObject(wrappedValue: brain)
         _session = StateObject(wrappedValue: session)
         _appState = StateObject(
             wrappedValue: AppState(
@@ -55,7 +64,12 @@ struct MojoShellApp: App {
                 }
             )
         )
-        _readiness = StateObject(wrappedValue: ReadinessState(daemonManager: daemonManager))
+        _readiness = StateObject(
+            wrappedValue: ReadinessState(
+                daemonManager: daemonManager,
+                brainPathProvider: { brain.activeBrainPath }
+            )
+        )
         _production = StateObject(
             wrappedValue: ProductionController(
                 computerUseProvider: computerUseProvider,
@@ -72,6 +86,7 @@ struct MojoShellApp: App {
             ContentView()
                 .environmentObject(appState)
                 .environmentObject(audit)
+                .environmentObject(brain)
                 .environmentObject(readiness)
                 .environmentObject(production)
                 .environmentObject(session)
@@ -86,6 +101,7 @@ struct MojoShellApp: App {
             MenuBarShellView()
                 .environmentObject(appState)
                 .environmentObject(audit)
+                .environmentObject(brain)
                 .environmentObject(readiness)
                 .environmentObject(production)
                 .environmentObject(session)
