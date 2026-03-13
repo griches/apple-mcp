@@ -10,7 +10,7 @@ struct MCPServerDefinition: Equatable {
 final class DaemonManager: ObservableObject {
     @Published private(set) var runningServers: [String: Process] = [:]
 
-    private let repoRoot: String
+    let repoRoot: String
 
     init(repoRoot: String = DaemonManager.defaultRepoRoot()) {
         self.repoRoot = repoRoot

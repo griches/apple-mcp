@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProductionDashboardView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var readiness: ReadinessState
     @State private var jobs: [MediaJob] = [
         MediaJob(
             name: "Appalachian Community FCU — Benefits Overview",
@@ -59,7 +60,7 @@ struct ProductionDashboardView: View {
                     Button(isDiscovering ? "Scanning..." : "Discover FCP Elements") {
                         Task { await discoverFcpElements() }
                     }
-                    .disabled(isDiscovering)
+                    .disabled(isDiscovering || !readiness.axPermissionGranted())
                 }
                 .foregroundStyle(.secondary)
 
@@ -93,15 +94,27 @@ struct ProductionDashboardView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Spacer()
-                Button(isRunningWorkflow ? "Running..." : "Run Assembly Workflow") {
-                    Task { await runAssemblyWorkflow() }
+                VStack(alignment: .leading, spacing: 4) {
+                    Button(isRunningWorkflow ? "Running..." : "Run Assembly Workflow") {
+                        Task { await runAssemblyWorkflow() }
+                    }
+                    .disabled(isRunningWorkflow || !readiness.isReady(for: .computerUse))
+
+                    if !readiness.isReady(for: .computerUse),
+                       let issue = readiness.blockingIssue(for: .computerUse) {
+                        Text(issue.fixInstruction)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                .disabled(isRunningWorkflow)
             }
             .padding()
             .frame(minWidth: 280)
         }
         .navigationTitle("Production")
+        .task {
+            await readiness.refreshComputerUse()
+        }
     }
 
     private func discoverFcpElements() async {

@@ -20,6 +20,8 @@ enum ShellView: String, CaseIterable, Identifiable {
 }
 
 struct ContentView: View {
+    @EnvironmentObject private var readiness: ReadinessState
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selected: ShellView? = .cockpit
 
     var body: some View {
@@ -31,13 +33,31 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(220)
             .listStyle(.sidebar)
         } detail: {
-            switch selected ?? .cockpit {
-            case .cockpit:
-                CockpitView()
-            case .terminal:
-                AgentTerminalView()
-            case .production:
-                ProductionDashboardView()
+            VStack(spacing: 0) {
+                CoreIssuesBanner()
+                Group {
+                    switch selected ?? .cockpit {
+                    case .cockpit:
+                        CockpitView()
+                    case .terminal:
+                        AgentTerminalView()
+                    case .production:
+                        ProductionDashboardView()
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $readiness.showFirstRunSheet) {
+            FirstRunSheet()
+        }
+        .task {
+            await readiness.refresh()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task {
+                    await readiness.refresh()
+                }
             }
         }
     }

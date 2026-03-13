@@ -15,4 +15,9 @@ final class DaemonManagerTests: XCTestCase {
             XCTAssertTrue(server.scriptPath.hasSuffix("index.js"), "\(server.name) path should end in index.js")
         }
     }
+
+    func testRepoRootIsAccessible() {
+        let manager = DaemonManager(repoRoot: "/tmp/test-root")
+        XCTAssertEqual(manager.repoRoot, "/tmp/test-root")
+    }
 }

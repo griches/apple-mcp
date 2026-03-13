@@ -15,6 +15,7 @@ struct TerminalEntry: Identifiable, Equatable {
 
 struct AgentTerminalView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var readiness: ReadinessState
     @State private var input = ""
     @State private var history: [TerminalEntry] = [
         TerminalEntry(role: .system, text: "MojoShell Agent Terminal ready. Type a command.")
@@ -43,6 +44,14 @@ struct AgentTerminalView: View {
             }
 
             Divider()
+
+            if !readiness.isReady(for: .llm) {
+                Text("LLM fallback unavailable; deterministic routing still works.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 4)
+            }
 
             HStack {
                 TextField("Type a command...", text: $input)
