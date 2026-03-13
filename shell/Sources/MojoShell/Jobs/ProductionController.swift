@@ -49,6 +49,19 @@ final class ProductionController: ObservableObject {
         recordEvent(jobID: job.id, type: .queued, message: "Job queued: \(name)", progress: 0.0)
     }
 
+    func retryFailedJob(id: UUID) {
+        guard let index = jobs.firstIndex(where: { $0.id == id && $0.status == .failed }) else {
+            return
+        }
+
+        jobs[index].status = .queued
+        jobs[index].progress = 0.0
+        jobs[index].completedAt = nil
+        jobs[index].errorMessage = nil
+        persistJobs()
+        recordEvent(jobID: id, type: .queued, message: "Job requeued for retry", progress: 0.0)
+    }
+
     func runNextAssemblyWorkflow() async {
         guard !isRunningWorkflow else {
             return

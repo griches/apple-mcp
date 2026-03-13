@@ -96,6 +96,43 @@ final class ProductionControllerTests: XCTestCase {
         let events = try eventStore.load()
         XCTAssertTrue(events.contains(where: { $0.type == .failed }))
     }
+
+    func testRetryFailedJobRequeuesIt() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let jobStore = JobStore(fileURL: root.appendingPathComponent("jobs.json"))
+        let eventStore = JobEventStore(fileURL: root.appendingPathComponent("events.json"))
+        let screenshotStore = ScreenshotStore(directoryURL: root.appendingPathComponent("screens"))
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: jobStore,
+            eventStore: eventStore,
+            screenshotStore: screenshotStore,
+            preflightCheck: { throw ProductionControllerError.noExportSelection },
+            stepsProvider: { [] }
+        )
+
+        controller.queueAssemblyJob(name: "Run Job", client: "QA")
+        await controller.runNextAssemblyWorkflow()
+
+        guard let failedID = controller.jobs.first?.id else {
+            XCTFail("Expected failed job to exist")
+            return
+        }
+
+        controller.retryFailedJob(id: failedID)
+
+        XCTAssertEqual(controller.jobs.first?.status, .queued)
+        XCTAssertNil(controller.jobs.first?.errorMessage)
+        XCTAssertEqual(controller.jobs.first?.progress, 0.0)
+
+        let events = try eventStore.load()
+        XCTAssertTrue(events.contains(where: { $0.message == "Job requeued for retry" }))
+    }
 }
 
 private actor ControllerTestComputerUseProvider: ComputerUseProvider {

@@ -103,6 +103,8 @@ struct CockpitView: View {
     @State private var isLoadingNowPlaying = false
     @State private var lastNowPlayingRefresh: Date?
     @State private var hasLoadedInitialPanels = false
+    @State private var operatorResult = "Finder, Safari, Shortcuts, and settings controls are ready."
+    @State private var isRunningOperatorAction = false
 
     var body: some View {
         HSplitView {
@@ -232,6 +234,47 @@ struct CockpitView: View {
                     }
                 } label: {
                     Label("Music", systemImage: "music.note")
+                }
+
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(operatorResult)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        HStack {
+                            Button("Downloads") {
+                                Task { await runOperatorAction(appState.openDownloadsFolder) }
+                            }
+                            Button("Repo") {
+                                Task { await runOperatorAction(appState.openRepoFolder) }
+                            }
+                            Button("Brain") {
+                                Task { await runOperatorAction(appState.revealBrainFile) }
+                            }
+                        }
+                        .disabled(isRunningOperatorAction)
+
+                        HStack {
+                            Button("Finder Selection") {
+                                Task { await runOperatorAction(appState.fetchFinderSelection) }
+                            }
+                            Button("Safari Tab") {
+                                Task { await runOperatorAction(appState.fetchSafariCurrentTab) }
+                            }
+                            Button("Shortcuts") {
+                                Task { await runOperatorAction(appState.listShortcuts) }
+                            }
+                        }
+                        .disabled(isRunningOperatorAction)
+
+                        Button("Accessibility Settings") {
+                            Task { await runOperatorAction(appState.openAccessibilitySettings) }
+                        }
+                        .disabled(isRunningOperatorAction)
+                    }
+                } label: {
+                    Label("Operator Controls", systemImage: "switch.2")
                 }
 
                 Divider()
@@ -371,5 +414,21 @@ struct CockpitView: View {
             }
         }
         isLoadingNowPlaying = false
+    }
+
+    private func runOperatorAction(
+        _ action: @escaping () async -> Result<MCPToolExecutionResult, Error>
+    ) async {
+        guard !isRunningOperatorAction else { return }
+        isRunningOperatorAction = true
+        defer { isRunningOperatorAction = false }
+
+        let result = await action()
+        switch result {
+        case .success(let output):
+            operatorResult = output.text
+        case .failure(let error):
+            operatorResult = "Error: \(error.localizedDescription)"
+        }
     }
 }

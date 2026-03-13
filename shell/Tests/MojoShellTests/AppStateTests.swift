@@ -10,7 +10,8 @@ final class AppStateTests: XCTestCase {
         let appState = AppState(
             daemons: daemonManager,
             executor: executor,
-            computerUseProvider: FakeComputerUseProvider()
+            computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: FakeNativeToolExecutor()
         )
         XCTAssertEqual(appState.computerUseProviderName, "fake-cu")
     }
@@ -22,6 +23,7 @@ final class AppStateTests: XCTestCase {
             daemons: daemonManager,
             executor: executor,
             computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: FakeNativeToolExecutor(),
             llmProviders: [
                 FakeLLMProvider(name: "claude", response: LLMResponse(text: "", resolvedTool: nil)),
                 FakeLLMProvider(name: "openai", response: LLMResponse(text: "", resolvedTool: nil)),
@@ -41,6 +43,7 @@ final class AppStateTests: XCTestCase {
             daemons: daemonManager,
             executor: executor,
             computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: FakeNativeToolExecutor(),
             llmProviders: llmProviders
         )
 
@@ -51,6 +54,67 @@ final class AppStateTests: XCTestCase {
             XCTAssertEqual(text, "fallback response")
         case .failure(let error):
             XCTFail("Expected fallback success, got \(error)")
+        }
+    }
+
+    func testExecuteRoutesShellNativeToolsToNativeExecutor() async {
+        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
+        let executor = MCPToolExecutor(daemonManager: daemonManager)
+        let nativeExecutor = FakeNativeToolExecutor()
+        let appState = AppState(
+            daemons: daemonManager,
+            executor: executor,
+            computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: nativeExecutor
+        )
+
+        let result = await appState.execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.shortcutsList.rawValue,
+                arguments: [:]
+            )
+        )
+
+        switch result {
+        case .success(let output):
+            XCTAssertEqual(output.text, "native result")
+        case .failure(let error):
+            XCTFail("Expected native execution success, got \(error)")
+        }
+    }
+
+    func testResolveWithLLMExecutesShellNativeResolvedTool() async {
+        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
+        let executor = MCPToolExecutor(daemonManager: daemonManager)
+        let nativeExecutor = FakeNativeToolExecutor()
+        let appState = AppState(
+            daemons: daemonManager,
+            executor: executor,
+            computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: nativeExecutor,
+            llmProviders: [
+                FakeLLMProvider(
+                    name: "claude",
+                    response: LLMResponse(
+                        text: "",
+                        resolvedTool: ResolvedTool(
+                            server: NativeToolExecutor.serverName,
+                            tool: NativeToolName.systemSettingsOpen.rawValue,
+                            arguments: ["pane": .string("accessibility")]
+                        )
+                    )
+                ),
+            ]
+        )
+
+        let result = await appState.resolveWithLLM(prompt: "open accessibility settings", availableTools: [])
+
+        switch result {
+        case .success(let text):
+            XCTAssertEqual(text, "native result")
+        case .failure(let error):
+            XCTFail("Expected native tool execution success, got \(error)")
         }
     }
 }
@@ -71,6 +135,12 @@ actor FakeComputerUseProvider: ComputerUseProvider {
     }
 
     func stopSession(sessionId _: String) async throws {}
+}
+
+actor FakeNativeToolExecutor: NativeToolExecuting {
+    func execute(tool: String, arguments _: [String: AnyCodable]) async throws -> MCPToolExecutionResult {
+        MCPToolExecutionResult(server: NativeToolExecutor.serverName, tool: tool, text: "native result")
+    }
 }
 
 struct FailingLLMProvider: LLMProvider {

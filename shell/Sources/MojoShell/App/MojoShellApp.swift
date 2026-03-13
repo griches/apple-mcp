@@ -10,10 +10,12 @@ struct MojoShellApp: App {
     init() {
         let daemonManager = DaemonManager()
         let computerUseProvider: any ComputerUseProvider = CuaComputerUseProvider()
+        let nativeExecutor: any NativeToolExecuting = NativeToolExecutor(repoRoot: daemonManager.repoRoot)
         _appState = StateObject(
             wrappedValue: AppState(
                 daemons: daemonManager,
-                computerUseProvider: computerUseProvider
+                computerUseProvider: computerUseProvider,
+                nativeExecutor: nativeExecutor
             )
         )
         _readiness = StateObject(wrappedValue: ReadinessState(daemonManager: daemonManager))

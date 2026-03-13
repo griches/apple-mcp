@@ -16,6 +16,28 @@ final class DeterministicRouterTests: XCTestCase {
         XCTAssertEqual(result?.tool, "pause")
     }
 
+    func testOpenDownloadsFolderRoutesToNativeFinderTool() {
+        let result = router.route("open downloads folder")
+        XCTAssertEqual(result?.server, NativeToolExecutor.serverName)
+        XCTAssertEqual(result?.tool, NativeToolName.finderOpenPath.rawValue)
+        XCTAssertEqual(result?.arguments["path"], .string("~/Downloads"))
+    }
+
+    func testOpenSafariURLBuildsNativeURLAction() {
+        let result = router.route("open openai.com in safari")
+        XCTAssertEqual(result?.server, NativeToolExecutor.serverName)
+        XCTAssertEqual(result?.tool, NativeToolName.safariOpenURL.rawValue)
+        XCTAssertEqual(result?.arguments["url"], .string("https://openai.com"))
+    }
+
+    func testRunShortcutParsesNameAndInput() {
+        let result = router.route("run shortcut Daily Brief with input inbox summary")
+        XCTAssertEqual(result?.server, NativeToolExecutor.serverName)
+        XCTAssertEqual(result?.tool, NativeToolName.shortcutsRun.rawValue)
+        XCTAssertEqual(result?.arguments["name"], .string("Daily Brief"))
+        XCTAssertEqual(result?.arguments["input"], .string("inbox summary"))
+    }
+
     func testFCPIntentFallsBack() {
         let result = router.route("export the current FCP timeline")
         XCTAssertNil(result)

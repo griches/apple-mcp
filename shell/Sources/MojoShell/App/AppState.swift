@@ -6,18 +6,21 @@ final class AppState: ObservableObject {
     let daemons: DaemonManager
     let executor: MCPToolExecutor
     let computerUseProvider: any ComputerUseProvider
+    let nativeExecutor: any NativeToolExecuting
     private let llmProviders: [any LLMProvider]
 
     init(
         daemons: DaemonManager? = nil,
         executor: MCPToolExecutor? = nil,
         computerUseProvider: (any ComputerUseProvider)? = nil,
+        nativeExecutor: (any NativeToolExecuting)? = nil,
         llmProviders: [any LLMProvider]? = nil
     ) {
         let resolvedDaemons = daemons ?? DaemonManager()
         self.daemons = resolvedDaemons
         self.executor = executor ?? MCPToolExecutor(daemonManager: resolvedDaemons)
         self.computerUseProvider = computerUseProvider ?? CuaComputerUseProvider()
+        self.nativeExecutor = nativeExecutor ?? NativeToolExecutor(repoRoot: resolvedDaemons.repoRoot)
 
         if let llmProviders {
             self.llmProviders = llmProviders
@@ -57,8 +60,13 @@ final class AppState: ObservableObject {
             do {
                 let response = try await provider.resolve(prompt: prompt, availableTools: availableTools)
                 if let tool = response.resolvedTool {
-                    let execResult = try await executor.execute(tool)
-                    return .success(execResult.text)
+                    let execResult = await execute(tool)
+                    switch execResult {
+                    case .success(let output):
+                        return .success(output.text)
+                    case .failure(let error):
+                        throw error
+                    }
                 }
                 return .success(response.text)
             } catch {
@@ -71,6 +79,14 @@ final class AppState: ObservableObject {
 
     func execute(_ resolvedTool: ResolvedTool) async -> Result<MCPToolExecutionResult, Error> {
         do {
+            if resolvedTool.server == NativeToolExecutor.serverName {
+                return .success(
+                    try await nativeExecutor.execute(
+                        tool: resolvedTool.tool,
+                        arguments: resolvedTool.arguments
+                    )
+                )
+            }
             return .success(try await executor.execute(resolvedTool))
         } catch {
             return .failure(error)
@@ -116,6 +132,76 @@ final class AppState: ObservableObject {
                 server: "apple-music",
                 tool: "now_playing",
                 arguments: [:]
+            )
+        )
+    }
+
+    func openDownloadsFolder() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderOpenPath.rawValue,
+                arguments: ["path": .string("~/Downloads")]
+            )
+        )
+    }
+
+    func openRepoFolder() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderOpenRepoRoot.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func revealBrainFile() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderRevealBrainFile.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func fetchFinderSelection() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderListSelection.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func fetchSafariCurrentTab() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.safariCurrentTab.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func listShortcuts() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.shortcutsList.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func openAccessibilitySettings() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.systemSettingsOpen.rawValue,
+                arguments: ["pane": .string("accessibility")]
             )
         )
     }

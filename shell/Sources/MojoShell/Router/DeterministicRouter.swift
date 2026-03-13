@@ -123,6 +123,78 @@ struct DeterministicRouter {
             phrases: ["laravel blueprint", "brain blueprint"],
             resolvedTool: ResolvedTool(server: "knowledge-corpus", tool: "get_laravel_brain_blueprint", arguments: [:])
         ),
+        Rule(
+            phrases: ["open downloads folder", "show downloads"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderOpenPath.rawValue,
+                arguments: ["path": .string("~/Downloads")]
+            )
+        ),
+        Rule(
+            phrases: ["open desktop folder", "show desktop folder"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderOpenPath.rawValue,
+                arguments: ["path": .string("~/Desktop")]
+            )
+        ),
+        Rule(
+            phrases: ["open repo folder", "open repo in finder", "show repo folder"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderOpenRepoRoot.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["reveal brain file", "show brain file"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderRevealBrainFile.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["finder selection", "what is selected in finder", "what's selected in finder"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderListSelection.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["current safari tab", "what's the current safari tab", "what is the current safari tab"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.safariCurrentTab.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["list shortcuts", "show shortcuts"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.shortcutsList.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["open accessibility settings"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.systemSettingsOpen.rawValue,
+                arguments: ["pane": .string("accessibility")]
+            )
+        ),
+        Rule(
+            phrases: ["open screen recording settings"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.systemSettingsOpen.rawValue,
+                arguments: ["pane": .string("screen_recording")]
+            )
+        ),
     ]
 
     var availableTools: [LLMToolDefinition] {
@@ -137,14 +209,23 @@ struct DeterministicRouter {
                 server: rule.resolvedTool.server
             ))
         }
+        tools.append(contentsOf: dynamicToolDefinitions.filter {
+            seen.insert("\($0.server)/\($0.name)").inserted
+        })
         return tools
     }
 
     func route(_ input: String) -> ResolvedTool? {
-        let normalized = input
-            .lowercased()
+        let raw = input
             .replacingOccurrences(of: "’", with: "'")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = raw
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let dynamicRoute = dynamicRoute(raw: raw, normalized: normalized) {
+            return dynamicRoute
+        }
 
         guard !normalized.contains("fcp"), !normalized.contains("final cut"), !normalized.contains("motion") else {
             return nil
@@ -153,5 +234,93 @@ struct DeterministicRouter {
         return rules.first(where: { rule in
             rule.phrases.contains(where: { normalized.contains($0) })
         })?.resolvedTool
+    }
+
+    private var dynamicToolDefinitions: [LLMToolDefinition] {
+        [
+            LLMToolDefinition(
+                name: NativeToolName.safariOpenURL.rawValue,
+                description: "Open a URL in Safari. Arguments: {url}",
+                server: NativeToolExecutor.serverName
+            ),
+            LLMToolDefinition(
+                name: NativeToolName.shortcutsRun.rawValue,
+                description: "Run a named shortcut. Arguments: {name, input?}",
+                server: NativeToolExecutor.serverName
+            ),
+        ]
+    }
+
+    private func dynamicRoute(raw: String, normalized: String) -> ResolvedTool? {
+        if normalized.hasPrefix("open "), normalized.hasSuffix(" in safari") {
+            let start = raw.index(raw.startIndex, offsetBy: 5)
+            let end = raw.index(raw.endIndex, offsetBy: -10)
+            let target = String(raw[start..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let url = safariURL(from: target) {
+                return ResolvedTool(
+                    server: NativeToolExecutor.serverName,
+                    tool: NativeToolName.safariOpenURL.rawValue,
+                    arguments: ["url": .string(url)]
+                )
+            }
+        }
+
+        if normalized.hasPrefix("run shortcut ") {
+            let prefixCount = "run shortcut ".count
+            let rawRemainder = String(raw.dropFirst(prefixCount)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowerRemainder = String(normalized.dropFirst(prefixCount)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let delimiter = " with input "
+
+            if let range = lowerRemainder.range(of: delimiter) {
+                let lowerName = lowerRemainder[..<range.lowerBound]
+                let nameEndDistance = lowerRemainder.distance(from: lowerRemainder.startIndex, to: lowerName.endIndex)
+                let rawNameEnd = rawRemainder.index(rawRemainder.startIndex, offsetBy: nameEndDistance)
+                let name = String(rawRemainder[..<rawNameEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let inputStart = rawRemainder.index(rawNameEnd, offsetBy: delimiter.count)
+                let input = String(rawRemainder[inputStart...]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if !name.isEmpty {
+                    var arguments: [String: AnyCodable] = ["name": .string(name)]
+                    if !input.isEmpty {
+                        arguments["input"] = .string(input)
+                    }
+                    return ResolvedTool(
+                        server: NativeToolExecutor.serverName,
+                        tool: NativeToolName.shortcutsRun.rawValue,
+                        arguments: arguments
+                    )
+                }
+            } else if !rawRemainder.isEmpty {
+                return ResolvedTool(
+                    server: NativeToolExecutor.serverName,
+                    tool: NativeToolName.shortcutsRun.rawValue,
+                    arguments: ["name": .string(rawRemainder)]
+                )
+            }
+        }
+
+        return nil
+    }
+
+    private func safariURL(from target: String) -> String? {
+        let trimmed = target.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+
+        if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
+            return trimmed
+        }
+
+        guard !trimmed.contains(" ") else {
+            return nil
+        }
+
+        guard trimmed.contains(".") else {
+            return nil
+        }
+
+        return "https://\(trimmed)"
     }
 }

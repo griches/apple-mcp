@@ -34,7 +34,9 @@ struct ProductionDashboardView: View {
                     .padding()
                 } else {
                     List(production.jobs) { job in
-                        JobRow(job: job)
+                        JobRow(job: job) {
+                            production.retryFailedJob(id: job.id)
+                        }
                     }
                 }
             }
@@ -148,6 +150,7 @@ struct ProductionDashboardView: View {
 
 struct JobRow: View {
     let job: MediaJob
+    let onRetry: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -171,6 +174,10 @@ struct JobRow: View {
                 Text(error)
                     .font(.caption2)
                     .foregroundStyle(.red)
+                Button("Retry") {
+                    onRetry()
+                }
+                .buttonStyle(.link)
             }
         }
         .padding(.vertical, 4)
