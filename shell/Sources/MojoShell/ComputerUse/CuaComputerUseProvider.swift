@@ -124,7 +124,7 @@ actor CuaComputerUseProvider: ComputerUseProvider {
         let src = CGEventSource(stateID: .hidSystemState)
 
         for scalar in text.unicodeScalars {
-            var ch = scalar.value
+            var ch = UniChar(truncatingIfNeeded: scalar.value)
             guard
                 let down = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true),
                 let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)

@@ -1,17 +1,17 @@
 import Foundation
 
-struct LLMToolDefinition: Equatable {
+struct LLMToolDefinition: Equatable, Sendable {
     let name: String
     let description: String
     let server: String
 }
 
-struct LLMResponse: Equatable {
+struct LLMResponse: Equatable, Sendable {
     let text: String
     let resolvedTool: ResolvedTool?
 }
 
-protocol LLMProvider {
+protocol LLMProvider: Sendable {
     var name: String { get }
     func resolve(prompt: String, availableTools: [LLMToolDefinition]) async throws -> LLMResponse
     func buildURLRequest(prompt: String, tools: [LLMToolDefinition]) throws -> URLRequest

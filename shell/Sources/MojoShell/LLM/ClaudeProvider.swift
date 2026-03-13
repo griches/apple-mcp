@@ -96,23 +96,3 @@ struct ClaudeProvider: LLMProvider {
     }
 }
 
-private extension AnyCodable {
-    init(_ value: Any) {
-        switch value {
-        case let string as String:
-            self = .string(string)
-        case let int as Int:
-            self = .int(int)
-        case let double as Double:
-            self = .double(double)
-        case let bool as Bool:
-            self = .bool(bool)
-        case let object as [String: Any]:
-            self = .object(object.mapValues(AnyCodable.init))
-        case let array as [Any]:
-            self = .array(array.map(AnyCodable.init))
-        default:
-            self = .null
-        }
-    }
-}

@@ -105,7 +105,7 @@ final class FcpWorkflowTests: XCTestCase {
 
         let sessionId = try await stub.startSession()
         let executor = WorkflowExecutor(provider: stub)
-        var log: [String] = []
+        let log = MessageLog()
 
         try await executor.run(steps: steps, sessionId: sessionId) { message in
             log.append(message)
@@ -116,7 +116,7 @@ final class FcpWorkflowTests: XCTestCase {
         XCTAssertEqual(actions[0].type, .keypress)
         XCTAssertEqual(actions[0].target, "cmd+tab")
         XCTAssertEqual(actions[1].target, "cmd+e")
-        XCTAssertTrue(log.contains("Workflow complete."))
+        XCTAssertTrue(log.messages.contains("Workflow complete."))
     }
 
     func testExecutorFallsBackToCoordinatesWhenAXFails() async throws {
@@ -159,7 +159,13 @@ final class FcpWorkflowTests: XCTestCase {
     }
 }
 
-// MARK: - Test double
+// MARK: - Test doubles
+
+/// Thread-safe string log for capturing @Sendable progress callbacks.
+final class MessageLog: @unchecked Sendable {
+    private(set) var messages: [String] = []
+    func append(_ message: String) { messages.append(message) }
+}
 
 actor CapturingComputerUseProvider: ComputerUseProvider {
     let name = "capturing-stub"

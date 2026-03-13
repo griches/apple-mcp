@@ -1,6 +1,6 @@
 import Foundation
 
-protocol MCPToolCalling {
+protocol MCPToolCalling: Sendable {
     func callTool(name: String, arguments: [String: AnyCodable]) async throws -> MCPResponse
 }
 

@@ -105,6 +105,8 @@ actor MCPClient {
     }
 }
 
+extension MCPClient: MCPToolCalling {}
+
 extension MCPResponse {
     var primaryTextContent: String? {
         result?.content?
@@ -114,7 +116,7 @@ extension MCPResponse {
     }
 }
 
-enum AnyCodable: Codable, Equatable {
+enum AnyCodable: Codable, Equatable, Sendable {
     case string(String)
     case int(Int)
     case double(Double)
@@ -163,6 +165,27 @@ enum AnyCodable: Codable, Equatable {
             try container.encode(value)
         case .null:
             try container.encodeNil()
+        }
+    }
+
+    /// Bridge from arbitrary `JSONSerialization` output (Any) to a typed AnyCodable case.
+    /// Bool must precede Int/Double because Swift bridges NSNumber booleans to Bool first.
+    init(_ value: Any) {
+        switch value {
+        case let bool as Bool:
+            self = .bool(bool)
+        case let int as Int:
+            self = .int(int)
+        case let double as Double:
+            self = .double(double)
+        case let string as String:
+            self = .string(string)
+        case let object as [String: Any]:
+            self = .object(object.mapValues(AnyCodable.init))
+        case let array as [Any]:
+            self = .array(array.map(AnyCodable.init))
+        default:
+            self = .null
         }
     }
 }

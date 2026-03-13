@@ -12,7 +12,7 @@ final class DaemonManager: ObservableObject {
 
     private let repoRoot: String
 
-    init(repoRoot: String = Self.defaultRepoRoot()) {
+    init(repoRoot: String = DaemonManager.defaultRepoRoot()) {
         self.repoRoot = repoRoot
     }
 

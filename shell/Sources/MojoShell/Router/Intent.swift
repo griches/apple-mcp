@@ -1,6 +1,6 @@
 import Foundation
 
-struct ResolvedTool: Equatable {
+struct ResolvedTool: Equatable, Sendable {
     let server: String
     let tool: String
     let arguments: [String: AnyCodable]

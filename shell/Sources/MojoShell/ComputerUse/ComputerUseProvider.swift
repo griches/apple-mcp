@@ -1,12 +1,12 @@
 import Foundation
 
-struct ComputerUseState: Equatable {
+struct ComputerUseState: Equatable, Sendable {
     let appName: String
     let screenshotData: Data?
     let timestamp: Date
 }
 
-enum ComputerUseActionType: String, Equatable {
+enum ComputerUseActionType: String, Equatable, Sendable {
     case click
     case type
     case keypress
@@ -14,7 +14,7 @@ enum ComputerUseActionType: String, Equatable {
     case drag
 }
 
-struct ComputerUseAction: Equatable {
+struct ComputerUseAction: Equatable, Sendable {
     let type: ComputerUseActionType
     let target: String
     let value: String?
@@ -26,13 +26,13 @@ struct ComputerUseAction: Equatable {
     }
 }
 
-struct ComputerUseResult: Equatable {
+struct ComputerUseResult: Equatable, Sendable {
     let success: Bool
     let message: String
     let screenshotAfter: Data?
 }
 
-protocol ComputerUseProvider {
+protocol ComputerUseProvider: Sendable {
     var name: String { get }
     func startSession() async throws -> String
     func captureState(sessionId: String) async throws -> ComputerUseState

@@ -201,7 +201,7 @@ struct WorkflowExecutor {
                 let activated = await MainActor.run {
                     NSWorkspace.shared.runningApplications
                         .first { $0.localizedName == appName }?
-                        .activate(options: .activateIgnoringOtherApps)
+                        .activate()
                         ?? false
                 }
                 if !activated {
