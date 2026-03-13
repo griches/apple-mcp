@@ -54,6 +54,7 @@ final class ShellSessionController: ObservableObject {
     @Published var preferredPreset: ProductionWorkflowPreset { didSet { persistIfReady() } }
     @Published var preferredExportTargetID: UUID? { didSet { persistIfReady() } }
     @Published var preferredApprovalMode: WorkflowApprovalMode { didSet { persistIfReady() } }
+    @Published var morningOpsRequestID: UUID?
 
     private let store: ShellSessionStore
     private var isHydrating = true
@@ -80,6 +81,10 @@ final class ShellSessionController: ObservableObject {
 
     func clearTerminalHistory() {
         terminalHistory = [TerminalEntry.initialSystemEntry]
+    }
+
+    func requestMorningOpsRun() {
+        morningOpsRequestID = UUID()
     }
 
     private func persistIfReady() {

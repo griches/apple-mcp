@@ -4,6 +4,7 @@ struct MenuBarShellView: View {
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var brain: BrainManager
+    @EnvironmentObject private var preferences: ShellPreferencesController
     @EnvironmentObject private var production: ProductionController
     @EnvironmentObject private var readiness: ReadinessState
     @EnvironmentObject private var session: ShellSessionController
@@ -40,6 +41,11 @@ struct MenuBarShellView: View {
             }
             .disabled(production.isRunningWorkflow || !readiness.isReady(for: .computerUse))
 
+            Button("Run Morning Ops") {
+                openMainWindow(.cockpit)
+                session.requestMorningOpsRun()
+            }
+
             Button("Restart All Daemons") {
                 appState.daemons.restartAll()
             }
@@ -67,6 +73,8 @@ struct MenuBarShellView: View {
             Button("Reveal Active Brain") {
                 Task { _ = await appState.revealBrainFile() }
             }
+
+            Toggle("Morning Ops on Launch", isOn: $preferences.morningOpsOnLaunch)
 
             if let target = production.defaultExportTarget {
                 Button("Open Default Export Target") {

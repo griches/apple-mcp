@@ -575,6 +575,40 @@ final class ProductionControllerTests: XCTestCase {
         XCTAssertEqual(try eventStore.load().filter { $0.type == .canceled }.count, 1)
     }
 
+    func testInterruptedRunningJobsAreRecoveredOnLoad() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let runningJob = MediaJob(
+            name: "Recovered Job",
+            client: "QA",
+            status: .running,
+            progress: 0.6,
+            createdAt: Date(),
+            completedAt: nil,
+            errorMessage: nil
+        )
+
+        let jobStore = JobStore(fileURL: root.appendingPathComponent("jobs.json"))
+        let eventStore = JobEventStore(fileURL: root.appendingPathComponent("events.json"))
+        try jobStore.save([runningJob])
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: jobStore,
+            eventStore: eventStore,
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            stepsProvider: { [] }
+        )
+
+        XCTAssertEqual(controller.jobs.first?.status, .failed)
+        XCTAssertEqual(controller.jobs.first?.errorMessage, "Recovered after unexpected app exit.")
+        XCTAssertTrue(try eventStore.load().contains(where: { $0.message.contains("Recovered interrupted running job") }))
+    }
+
     private func waitUntil(
         timeoutIterations: Int = 100,
         condition: @escaping () -> Bool

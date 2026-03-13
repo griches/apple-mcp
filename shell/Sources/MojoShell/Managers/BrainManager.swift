@@ -77,6 +77,7 @@ struct BrainConfigStore {
 enum BrainManagerError: LocalizedError, Equatable {
     case repoBrainMissing(String)
     case customBrainMissing(String)
+    case importSourceMissing(String)
 
     var errorDescription: String? {
         switch self {
@@ -84,6 +85,8 @@ enum BrainManagerError: LocalizedError, Equatable {
             return "Repo brain file missing: \(path)"
         case .customBrainMissing(let path):
             return "Custom brain file missing: \(path)"
+        case .importSourceMissing(let path):
+            return "Import source missing: \(path)"
         }
     }
 }
@@ -148,6 +151,23 @@ final class BrainManager: ObservableObject {
         sourceMode = .custom
         activeBrainPath = resolved
         persist(customPath: resolved)
+    }
+
+    func importLocalBrain(from path: String) throws {
+        let resolved = (path as NSString).expandingTildeInPath
+        guard fileManager.fileExists(atPath: resolved) else {
+            throw BrainManagerError.importSourceMissing(resolved)
+        }
+
+        let targetURL = URL(fileURLWithPath: localBrainPath)
+        try fileManager.createDirectory(at: targetURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if fileManager.fileExists(atPath: localBrainPath) {
+            try fileManager.removeItem(atPath: localBrainPath)
+        }
+        try fileManager.copyItem(atPath: resolved, toPath: localBrainPath)
+        sourceMode = .localCopy
+        activeBrainPath = localBrainPath
+        persist()
     }
 
     func seedLocalBrainIfNeeded() throws {

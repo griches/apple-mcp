@@ -39,4 +39,19 @@ final class ShellSessionControllerTests: XCTestCase {
         XCTAssertEqual(controller.terminalHistory.count, 1)
         XCTAssertEqual(controller.terminalHistory.first?.role, .system)
     }
+
+    func testMorningOpsRequestIsTransient() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-session-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ShellSessionStore(fileURL: root.appendingPathComponent("session.json"))
+        let controller = ShellSessionController(store: store)
+        controller.requestMorningOpsRun()
+
+        XCTAssertNotNil(controller.morningOpsRequestID)
+        let reloaded = ShellSessionController(store: store)
+        XCTAssertNil(reloaded.morningOpsRequestID)
+    }
 }

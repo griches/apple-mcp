@@ -281,6 +281,14 @@ final class DaemonManager: ObservableObject {
         runtimeLogSnippets[serverName] ?? ""
     }
 
+    func runtimeLog(for serverName: String) -> String {
+        (try? logStore.load(serverName: serverName, kind: .runtime)) ?? ""
+    }
+
+    func buildLog(for serverName: String) -> String {
+        (try? logStore.load(serverName: serverName, kind: .build)) ?? ""
+    }
+
     func logPath(for serverName: String, kind: DaemonLogKind) -> String {
         logStore.logURL(for: serverName, kind: kind).path
     }

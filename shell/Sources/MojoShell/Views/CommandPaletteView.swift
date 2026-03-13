@@ -15,6 +15,7 @@ struct CommandPaletteView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var audit: AuditController
     @EnvironmentObject private var brain: BrainManager
+    @EnvironmentObject private var preferences: ShellPreferencesController
     @EnvironmentObject private var production: ProductionController
     @EnvironmentObject private var session: ShellSessionController
 
@@ -135,6 +136,15 @@ struct CommandPaletteView: View {
                 await production.runNextWorkflow()
             },
             PaletteAction(
+                id: "run-morning-ops",
+                title: "Run Morning Ops",
+                subtitle: "Open Cockpit and run the morning operating refresh.",
+                keywords: ["morning", "ops", "cockpit", "refresh"]
+            ) {
+                selectedView = .cockpit
+                session.requestMorningOpsRun()
+            },
+            PaletteAction(
                 id: "queue-fcp-export",
                 title: "Queue FCP Export",
                 subtitle: "Queue the current timeline export preset.",
@@ -232,6 +242,14 @@ struct CommandPaletteView: View {
                 } catch {
                     audit.record(category: .system, title: "Local brain switch failed", detail: error.localizedDescription)
                 }
+            },
+            PaletteAction(
+                id: "toggle-morning-ops-launch",
+                title: preferences.morningOpsOnLaunch ? "Disable Morning Ops on Launch" : "Enable Morning Ops on Launch",
+                subtitle: "Toggle launch-time morning refresh behavior.",
+                keywords: ["morning", "ops", "launch", "toggle"]
+            ) {
+                preferences.morningOpsOnLaunch.toggle()
             },
             PaletteAction(
                 id: "open-repo-terminal",

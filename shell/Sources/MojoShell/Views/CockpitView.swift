@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 private struct PersonaCardView: View {
     let data: PersonaCardData
@@ -91,7 +93,9 @@ private struct StatusDotView: View {
 struct CockpitView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var brain: BrainManager
+    @EnvironmentObject private var preferences: ShellPreferencesController
     @EnvironmentObject private var readiness: ReadinessState
+    @EnvironmentObject private var session: ShellSessionController
     @State private var scanResult = "Tap Scan to load Daily Intel"
     @State private var personaMapResult = ""
     @State private var parsedPersonas: [PersonaCardData] = []
@@ -109,6 +113,15 @@ struct CockpitView: View {
     @State private var isRunningOperatorAction = false
     @State private var isRunningBrainAction = false
     @State private var isRunningDaemonAction = false
+    @State private var isRunningMorningOps = false
+    @State private var isSelectingBrainFile = false
+    @State private var brainSelectionMode: BrainSelectionMode = .custom
+    @State private var selectedDaemonName: String?
+
+    private enum BrainSelectionMode {
+        case custom
+        case importLocal
+    }
 
     var body: some View {
         HSplitView {
@@ -173,11 +186,25 @@ struct CockpitView: View {
                             Button("Use Local") {
                                 Task { await switchToLocalBrain() }
                             }
+                            Button("Use Custom...") {
+                                brainSelectionMode = .custom
+                                isSelectingBrainFile = true
+                            }
+                            Button("Import Local...") {
+                                brainSelectionMode = .importLocal
+                                isSelectingBrainFile = true
+                            }
                             Button("Reveal") {
                                 Task { await runOperatorAction(appState.revealBrainFile) }
                             }
                         }
                         .disabled(isRunningBrainAction || isRunningOperatorAction)
+
+                        if let metadata = DocumentInspector.inspect(path: brain.activeBrainPath) {
+                            Text(brainMetadataSummary(metadata))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
 
                         if let parsedBrainOverview {
                             Text(parsedBrainOverview.headline)
@@ -258,6 +285,38 @@ struct CockpitView: View {
                     }
                 } label: {
                     Label("Music", systemImage: "music.note")
+                }
+
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Button(isRunningMorningOps ? "Running..." : "Run Morning Ops") {
+                                Task { await runMorningOps(trigger: "manual") }
+                            }
+                            .disabled(isRunningMorningOps)
+
+                            Toggle("Launch Morning Ops", isOn: $preferences.morningOpsOnLaunch)
+                                .toggleStyle(.switch)
+                        }
+
+                        Toggle("Auto-refresh Now Playing", isOn: $preferences.autoRefreshNowPlaying)
+                            .toggleStyle(.switch)
+
+                        Toggle("Auto-start Daemons on Next Launch", isOn: $preferences.autoStartDaemonsOnLaunch)
+                            .toggleStyle(.switch)
+
+                        if let lastRun = preferences.lastMorningOpsRunAt {
+                            Text("Last run \(lastRun.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Morning Ops has not run yet.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } label: {
+                    Label("Morning Ops", systemImage: "sun.max")
                 }
 
                 GroupBox {
@@ -374,6 +433,9 @@ struct CockpitView: View {
                                     Button("Script") {
                                         Task { _ = await appState.revealFinderPath(state.scriptPath) }
                                     }
+                                    Button("Inspect") {
+                                        selectedDaemonName = state.serverName
+                                    }
                                 }
 
                                 if let error = state.lastError, !error.isEmpty {
@@ -402,6 +464,38 @@ struct CockpitView: View {
                         }
                     }
                 }
+
+                if let selectedDaemonName,
+                   let selectedState = appState.daemons.runtimeState(for: selectedDaemonName) {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(selectedDaemonName)
+                                    .font(.headline)
+                                Spacer()
+                                Button("Copy Runtime") {
+                                    copyToPasteboard(appState.daemons.runtimeLog(for: selectedDaemonName))
+                                }
+                                Button("Copy Build") {
+                                    copyToPasteboard(appState.daemons.buildLog(for: selectedDaemonName))
+                                }
+                            }
+
+                            Text(selectedState.scriptPath)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+
+                            HSplitView {
+                                logPanel(title: "Runtime Log", text: appState.daemons.runtimeLog(for: selectedDaemonName))
+                                logPanel(title: "Build Log", text: appState.daemons.buildLog(for: selectedDaemonName))
+                            }
+                            .frame(minHeight: 220)
+                        }
+                    } label: {
+                        Label("Daemon Inspector", systemImage: "doc.text.magnifyingglass")
+                    }
+                }
             }
             .padding()
             .frame(minWidth: 320)
@@ -410,9 +504,17 @@ struct CockpitView: View {
         .task {
             guard !hasLoadedInitialPanels else { return }
             hasLoadedInitialPanels = true
-            await loadPersonaMap()
-            await loadBrainOverview()
-            await loadNowPlaying(triggeredByPoll: false)
+            if session.morningOpsRequestID != nil {
+                await runMorningOps(trigger: "request")
+            } else if preferences.morningOpsOnLaunch {
+                await runMorningOps(trigger: "launch")
+            } else {
+                await loadPersonaMap()
+                await loadBrainOverview()
+                if preferences.autoRefreshNowPlaying {
+                    await loadNowPlaying(triggeredByPoll: false)
+                }
+            }
         }
         .task {
             while !Task.isCancelled {
@@ -420,8 +522,22 @@ struct CockpitView: View {
                 if Task.isCancelled {
                     break
                 }
+                guard preferences.autoRefreshNowPlaying else {
+                    continue
+                }
                 await loadNowPlaying(triggeredByPoll: true)
             }
+        }
+        .fileImporter(
+            isPresented: $isSelectingBrainFile,
+            allowedContentTypes: [.json, .item],
+            allowsMultipleSelection: false
+        ) { result in
+            handleBrainSelection(result)
+        }
+        .onChange(of: session.morningOpsRequestID) { _, newValue in
+            guard newValue != nil else { return }
+            Task { await runMorningOps(trigger: "request") }
         }
         .onAppear {
             appState.daemons.refreshRuntimeStates()
@@ -574,5 +690,87 @@ struct CockpitView: View {
         isRunningDaemonAction = true
         defer { isRunningDaemonAction = false }
         await appState.daemons.buildAll()
+    }
+
+    private func runMorningOps(trigger: String) async {
+        guard !isRunningMorningOps else { return }
+        isRunningMorningOps = true
+        defer { isRunningMorningOps = false }
+
+        appState.daemons.refreshRuntimeStates()
+        await scanInboxes()
+        await loadPersonaMap()
+        await loadBrainOverview()
+        if preferences.autoRefreshNowPlaying {
+            await loadNowPlaying(triggeredByPoll: false)
+        }
+        preferences.recordMorningOpsRun()
+        session.morningOpsRequestID = nil
+        operatorResult = "Morning Ops complete (\(trigger))."
+    }
+
+    private func handleBrainSelection(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else {
+            if case .failure(let error) = result {
+                operatorResult = "Brain import error: \(error.localizedDescription)"
+            }
+            return
+        }
+
+        Task {
+            await applyBrainSelection(url.path)
+        }
+    }
+
+    private func applyBrainSelection(_ path: String) async {
+        guard !isRunningBrainAction else { return }
+        isRunningBrainAction = true
+        defer { isRunningBrainAction = false }
+
+        do {
+            switch brainSelectionMode {
+            case .custom:
+                try brain.useCustomBrain(path: path)
+            case .importLocal:
+                try brain.importLocalBrain(from: path)
+            }
+            appState.daemons.restart(serverName: "knowledge-corpus")
+            await readiness.refresh()
+            await loadBrainOverview()
+            operatorResult = "Active brain updated: \(brain.activeBrainPath)"
+        } catch {
+            operatorResult = "Brain error: \(error.localizedDescription)"
+        }
+    }
+
+    private func brainMetadataSummary(_ metadata: DocumentMetadata) -> String {
+        var parts: [String] = [metadata.kind.rawValue]
+        if let byteSize = metadata.byteSize {
+            parts.append(ByteCountFormatter.string(fromByteCount: byteSize, countStyle: .file))
+        }
+        if let modifiedAt = metadata.modifiedAt {
+            parts.append("Modified \(modifiedAt.formatted(date: .abbreviated, time: .shortened))")
+        }
+        return parts.joined(separator: " • ")
+    }
+
+    private func logPanel(title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ScrollView {
+                Text(text.isEmpty ? "No log output yet." : text)
+                    .font(.system(.caption2, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        operatorResult = "Copied log output to the clipboard."
     }
 }

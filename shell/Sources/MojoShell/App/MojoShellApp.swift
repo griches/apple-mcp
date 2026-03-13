@@ -6,6 +6,7 @@ struct MojoShellApp: App {
     @StateObject private var appState: AppState
     @StateObject private var audit: AuditController
     @StateObject private var brain: BrainManager
+    @StateObject private var preferences: ShellPreferencesController
     @StateObject private var readiness: ReadinessState
     @StateObject private var production: ProductionController
     @StateObject private var session: ShellSessionController
@@ -14,6 +15,7 @@ struct MojoShellApp: App {
         let notifications = AppNotificationManager()
         let audit = AuditController()
         let session = ShellSessionController()
+        let preferences = ShellPreferencesController()
         let repoRoot = DaemonManager.defaultRepoRoot()
         let brain = BrainManager(repoRoot: repoRoot)
         let daemonManager = DaemonManager(
@@ -53,6 +55,7 @@ struct MojoShellApp: App {
         )
         _audit = StateObject(wrappedValue: audit)
         _brain = StateObject(wrappedValue: brain)
+        _preferences = StateObject(wrappedValue: preferences)
         _session = StateObject(wrappedValue: session)
         _appState = StateObject(
             wrappedValue: AppState(
@@ -61,7 +64,8 @@ struct MojoShellApp: App {
                 nativeExecutor: nativeExecutor,
                 auditRecorder: { category, title, detail, metadata in
                     audit.record(category: category, title: title, detail: detail, metadata: metadata)
-                }
+                },
+                startDaemonsOnInit: preferences.autoStartDaemonsOnLaunch
             )
         )
         _readiness = StateObject(
@@ -87,6 +91,7 @@ struct MojoShellApp: App {
                 .environmentObject(appState)
                 .environmentObject(audit)
                 .environmentObject(brain)
+                .environmentObject(preferences)
                 .environmentObject(readiness)
                 .environmentObject(production)
                 .environmentObject(session)
@@ -102,6 +107,7 @@ struct MojoShellApp: App {
                 .environmentObject(appState)
                 .environmentObject(audit)
                 .environmentObject(brain)
+                .environmentObject(preferences)
                 .environmentObject(readiness)
                 .environmentObject(production)
                 .environmentObject(session)

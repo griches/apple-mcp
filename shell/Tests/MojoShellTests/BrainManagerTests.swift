@@ -66,6 +66,35 @@ final class BrainManagerTests: XCTestCase {
         XCTAssertEqual(reloaded.activeBrainPath, original.localBrainPath)
     }
 
+    func testImportLocalBrainCopiesSelectedFile() throws {
+        let root = try makeBrainRepoRoot()
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("brain-config-\(UUID().uuidString).json")
+        let localBrainURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-brain-\(UUID().uuidString).json")
+        let importURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("import-brain-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: storeURL) }
+        defer { try? FileManager.default.removeItem(at: localBrainURL) }
+        defer { try? FileManager.default.removeItem(at: importURL) }
+
+        try Data("{\"custom\":true}".utf8).write(to: importURL)
+
+        let manager = BrainManager(
+            repoRoot: root,
+            localBrainPath: localBrainURL.path,
+            store: BrainConfigStore(fileURL: storeURL)
+        )
+
+        try manager.importLocalBrain(from: importURL.path)
+
+        XCTAssertEqual(manager.sourceMode, .localCopy)
+        XCTAssertEqual(manager.activeBrainPath, localBrainURL.path)
+        XCTAssertEqual(try String(contentsOf: localBrainURL), "{\"custom\":true}")
+    }
+
     private func makeBrainRepoRoot() throws -> String {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mojoshell-brain-\(UUID().uuidString)")

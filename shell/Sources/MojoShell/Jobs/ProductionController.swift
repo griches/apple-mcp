@@ -71,6 +71,7 @@ final class ProductionController: ObservableObject {
         self.auditRecorder = auditRecorder ?? { _, _, _, _ in }
         self.now = now
         loadFromDisk()
+        recoverInterruptedJobs()
     }
 
     var defaultExportTarget: ExportTarget? {
@@ -498,6 +499,33 @@ final class ProductionController: ObservableObject {
             exportTargets = []
             workflowLog = "Unable to load export targets: \(error.localizedDescription)"
         }
+    }
+
+    private func recoverInterruptedJobs() {
+        let interruptedIDs = jobs
+            .filter { $0.status == .running }
+            .map(\.id)
+
+        guard !interruptedIDs.isEmpty else {
+            return
+        }
+
+        for id in interruptedIDs {
+            updateJob(
+                id: id,
+                status: .failed,
+                progress: 0.0,
+                completedAt: nil,
+                errorMessage: "Recovered after unexpected app exit."
+            )
+            recordEvent(
+                jobID: id,
+                type: .failed,
+                message: "Recovered interrupted running job after unexpected app exit"
+            )
+        }
+
+        workflowLog = "Recovered \(interruptedIDs.count) interrupted job(s) from the last session."
     }
 
     private func persistJobs() {

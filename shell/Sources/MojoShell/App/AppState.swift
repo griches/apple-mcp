@@ -16,7 +16,8 @@ final class AppState: ObservableObject {
         computerUseProvider: (any ComputerUseProvider)? = nil,
         nativeExecutor: (any NativeToolExecuting)? = nil,
         llmProviders: [any LLMProvider]? = nil,
-        auditRecorder: (@MainActor (AuditCategory, String, String, [String: String]) -> Void)? = nil
+        auditRecorder: (@MainActor (AuditCategory, String, String, [String: String]) -> Void)? = nil,
+        startDaemonsOnInit: Bool = true
     ) {
         let resolvedDaemons = daemons ?? DaemonManager()
         self.daemons = resolvedDaemons
@@ -38,7 +39,9 @@ final class AppState: ObservableObject {
             self.llmProviders = providers
         }
 
-        resolvedDaemons.startAll()
+        if startDaemonsOnInit {
+            resolvedDaemons.startAll()
+        }
     }
 
     var computerUseProviderName: String {
