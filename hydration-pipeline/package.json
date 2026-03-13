@@ -1,0 +1,30 @@
+{
+  "name": "@griches/hydration-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repo-local North Star hydration harvest and skill compiler pipeline",
+  "main": "build/cli.js",
+  "bin": {
+    "hydration-pipeline": "build/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/cli.js",
+    "hydrate": "npm run build && node build/cli.js"
+  },
+  "keywords": [
+    "hydration",
+    "voice",
+    "skill",
+    "compiler",
+    "mcp"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  }
+}
