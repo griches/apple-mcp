@@ -23,6 +23,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "typescript": "^5.8.3"
