@@ -122,17 +122,19 @@ enum FcpWorkflowDefinition {
 
     /// Assembly workflow: bring FCP to front, open the Export File sheet, confirm.
     ///
-    /// Verified against live Final Cut Pro via AX discovery (2026-03-12):
-    ///   - Toolbar share button: "Share the project, event clip, or Timeline range"
-    ///   - File > Share submenu entry: "Export File (default)…" (greyed unless clip selected)
-    ///   - "Next" and "Save" button titles inside the sheet: TBD — requires clip selected to open
-    ///
-    /// The toolbar button click opens the same sheet as File > Share > Export File (default)…
-    /// Requires a clip or project to be selected in the FCP timeline before running.
+    /// AX discovery status (2026-03-12):
+    ///   ✅ Step 1 — toolbar Share button: "Share the project, event clip, or Timeline range"
+    ///   ⚠️  Step 2 — shareDestination: "Export File (default)…" is context-sensitive.
+    ///              It does NOT appear in the AX tree unless FCP has an exportable project/clip
+    ///              selected. Without that state, only "Export XML…" and "Export Captions…"
+    ///              are visible. File > Share > "Export File (default)…" is the target entry.
+    ///   ❌ Steps 3-4 — "Next" / "Save" inside the export sheet: TBD.
+    ///              Requires: project open → timeline selection → Share → Export File → sheet open.
+    ///              Then run: scripts/discover_ax_elements.py --app "Final Cut Pro" --title next
     ///
     /// - Parameter shareDestination: The share-sheet destination button title to select.
-    ///   Defaults to `"Export File (default)…"` — the verified File > Share item name.
-    ///   Other options from the submenu: `"Apple Devices 1080p…"`, `"Social Platforms…"`, etc.
+    ///   Defaults to `"Export File (default)…"` — the File > Share item name (context-sensitive).
+    ///   Other destinations: `"Apple Devices 1080p…"`, `"Social Platforms…"`, etc.
     static func assemblyWorkflow(shareDestination: String = "Export File (default)…") -> [WorkflowStep] {
         [
             // 1. Bring FCP to front deterministically (NSWorkspace, not cmd+tab)
@@ -148,10 +150,11 @@ enum FcpWorkflowDefinition {
                 delay: 1.0
             ),
 
-            // 3. Select the export destination inside the sheet.
-            //    Live AX title for the default path: "Export File (default)…"
-            //    "Next" and "Save" button titles inside the open sheet are TBD —
-            //    run discover_ax_elements.py with a clip selected to get exact strings.
+            // 3. Select the export destination.
+            //    "Export File (default)…" is the target AX title — only exposed when FCP
+            //    has an exportable project/clip selected in the timeline.
+            //    TBD: verify exact title with:
+            //      scripts/discover_ax_elements.py --app "Final Cut Pro" --title export --max-depth 10
             .click(
                 "Select '\(shareDestination)'",
                 app: "Final Cut Pro",
@@ -159,9 +162,10 @@ enum FcpWorkflowDefinition {
                 delay: 0.5
             ),
 
-            // 4. Advance through the sheet.
-            //    Title TBD — will be "Next…" or "Save" depending on sheet step.
-            //    Update after running: scripts/discover_ax_elements.py --app "Final Cut Pro" --title next
+            // 4. Advance through the export sheet.
+            //    Title TBD — verify with sheet open:
+            //      scripts/discover_ax_elements.py --app "Final Cut Pro" --title next --max-depth 10
+            //      scripts/discover_ax_elements.py --app "Final Cut Pro" --title save --max-depth 10
             .click(
                 "Click Next / Save",
                 app: "Final Cut Pro",
