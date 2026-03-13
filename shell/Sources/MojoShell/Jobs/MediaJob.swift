@@ -5,6 +5,7 @@ enum MediaJobStatus: String, Codable, Equatable, Sendable {
     case running
     case completed
     case failed
+    case canceled
 }
 
 struct MediaJob: Identifiable, Codable, Equatable, Sendable {

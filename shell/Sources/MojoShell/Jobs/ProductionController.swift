@@ -1,22 +1,35 @@
 import Foundation
 
+struct WorkflowApprovalRequest: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let jobID: UUID
+    let stepIndex: Int
+    let stepDescription: String
+    let prompt: String
+    let createdAt: Date
+}
+
 @MainActor
 final class ProductionController: ObservableObject {
     @Published private(set) var jobs: [MediaJob] = []
     @Published private(set) var recentEvents: [JobEvent] = []
     @Published var workflowLog = "Ready. Queue a job, then run the assembly workflow."
     @Published var isRunningWorkflow = false
+    @Published private(set) var pendingApproval: WorkflowApprovalRequest?
 
     private let computerUseProvider: any ComputerUseProvider
+    private let notifications: any AppNotifying
     private let jobStore: JobStore
     private let eventStore: JobEventStore
     private let screenshotStore: ScreenshotStore
     private let preflightCheck: @MainActor () throws -> Void
     private let stepsProvider: () -> [WorkflowStep]
     private let now: () -> Date
+    private var approvalContinuation: CheckedContinuation<Bool, Never>?
 
     init(
         computerUseProvider: any ComputerUseProvider,
+        notifications: (any AppNotifying)? = nil,
         jobStore: JobStore = JobStore(),
         eventStore: JobEventStore = JobEventStore(),
         screenshotStore: ScreenshotStore = ScreenshotStore(),
@@ -25,6 +38,7 @@ final class ProductionController: ObservableObject {
         now: @escaping () -> Date = Date.init
     ) {
         self.computerUseProvider = computerUseProvider
+        self.notifications = notifications ?? NullNotificationManager()
         self.jobStore = jobStore
         self.eventStore = eventStore
         self.screenshotStore = screenshotStore
@@ -50,7 +64,7 @@ final class ProductionController: ObservableObject {
     }
 
     func retryFailedJob(id: UUID) {
-        guard let index = jobs.firstIndex(where: { $0.id == id && $0.status == .failed }) else {
+        guard let index = jobs.firstIndex(where: { $0.id == id && ($0.status == .failed || $0.status == .canceled) }) else {
             return
         }
 
@@ -60,6 +74,26 @@ final class ProductionController: ObservableObject {
         jobs[index].errorMessage = nil
         persistJobs()
         recordEvent(jobID: id, type: .queued, message: "Job requeued for retry", progress: 0.0)
+    }
+
+    func approvePendingStep() {
+        guard let request = pendingApproval else {
+            return
+        }
+        pendingApproval = nil
+        recordEvent(jobID: request.jobID, type: .info, message: "Approval granted for step \(request.stepIndex + 1)")
+        approvalContinuation?.resume(returning: true)
+        approvalContinuation = nil
+    }
+
+    func rejectPendingStep() {
+        guard let request = pendingApproval else {
+            return
+        }
+        pendingApproval = nil
+        recordEvent(jobID: request.jobID, type: .canceled, message: "Approval rejected for step \(request.stepIndex + 1)")
+        approvalContinuation?.resume(returning: false)
+        approvalContinuation = nil
     }
 
     func runNextAssemblyWorkflow() async {
@@ -84,6 +118,7 @@ final class ProductionController: ObservableObject {
             let message = humanReadablePreflightError(error)
             failJob(id: jobID, message: message)
             workflowLog = message
+            await notifications.deliver(title: "MojoShell Job Failed", body: jobTitle(for: jobID))
             return
         }
 
@@ -127,6 +162,10 @@ final class ProductionController: ObservableObject {
                             self.workflowLog = "Screenshot persistence failed: \(error.localizedDescription)"
                         }
                     }
+                },
+                onApprovalRequested: { [weak self] stepIndex, step in
+                    guard let self else { return false }
+                    return await self.requestApproval(jobID: jobID, stepIndex: stepIndex, step: step)
                 }
             )
 
@@ -137,19 +176,36 @@ final class ProductionController: ObservableObject {
             updateJob(id: jobID, status: .completed, progress: 1.0, completedAt: now(), errorMessage: nil)
             workflowLog = "Assembly workflow complete."
             recordEvent(jobID: jobID, type: .completed, message: "Assembly workflow complete", progress: 1.0)
+            await notifications.deliver(title: "MojoShell Job Complete", body: jobTitle(for: jobID))
         } catch {
             if let sessionId {
                 try? await computerUseProvider.stopSession(sessionId: sessionId)
             }
-            let message = error.localizedDescription
-            failJob(id: jobID, message: message)
-            workflowLog = "Error: \(message)"
+            pendingApproval = nil
+
+            if let workflowError = error as? WorkflowError,
+               case .approvalRejected = workflowError {
+                let message = workflowError.localizedDescription
+                cancelJob(id: jobID, message: message)
+                workflowLog = message
+                await notifications.deliver(title: "MojoShell Job Canceled", body: jobTitle(for: jobID))
+            } else {
+                let message = error.localizedDescription
+                failJob(id: jobID, message: message)
+                workflowLog = "Error: \(message)"
+                await notifications.deliver(title: "MojoShell Job Failed", body: jobTitle(for: jobID))
+            }
         }
     }
 
     private func failJob(id: UUID, message: String) {
         updateJob(id: id, status: .failed, progress: 0.0, completedAt: nil, errorMessage: message)
         recordEvent(jobID: id, type: .failed, message: message)
+    }
+
+    private func cancelJob(id: UUID, message: String) {
+        updateJob(id: id, status: .canceled, progress: 0.0, completedAt: nil, errorMessage: message)
+        recordEvent(jobID: id, type: .canceled, message: message)
     }
 
     private func updateJob(
@@ -231,6 +287,28 @@ final class ProductionController: ObservableObject {
         guard totalSteps > 0 else { return nil }
 
         return min(max(Double(step) / Double(totalSteps), 0.0), 1.0)
+    }
+
+    private func requestApproval(jobID: UUID, stepIndex: Int, step: WorkflowStep) async -> Bool {
+        let prompt = step.approvalPrompt ?? "Approve this computer-use action."
+        let request = WorkflowApprovalRequest(
+            jobID: jobID,
+            stepIndex: stepIndex,
+            stepDescription: step.description,
+            prompt: prompt,
+            createdAt: now()
+        )
+        pendingApproval = request
+        workflowLog = "Awaiting approval for step \(stepIndex + 1): \(step.description)"
+        recordEvent(jobID: jobID, type: .info, message: "Approval required for step \(stepIndex + 1): \(step.description)")
+
+        return await withCheckedContinuation { continuation in
+            approvalContinuation = continuation
+        }
+    }
+
+    private func jobTitle(for id: UUID) -> String {
+        jobs.first(where: { $0.id == id })?.name ?? "Unknown Job"
     }
 
     private static func defaultPreflightCheck() throws {

@@ -47,9 +47,14 @@ final class DaemonManager: ObservableObject {
     @Published private(set) var runtimeStates: [String: DaemonRuntimeState] = [:]
 
     let repoRoot: String
+    private let onRuntimeStateChanged: @MainActor (DaemonRuntimeState?, DaemonRuntimeState) -> Void
 
-    init(repoRoot: String = DaemonManager.defaultRepoRoot()) {
+    init(
+        repoRoot: String = DaemonManager.defaultRepoRoot(),
+        onRuntimeStateChanged: @escaping @MainActor (DaemonRuntimeState?, DaemonRuntimeState) -> Void = { _, _ in }
+    ) {
         self.repoRoot = repoRoot
+        self.onRuntimeStateChanged = onRuntimeStateChanged
         refreshRuntimeStates()
     }
 
@@ -265,13 +270,20 @@ final class DaemonManager: ObservableObject {
         pid: Int32?,
         lastError: String?
     ) {
-        runtimeStates[definition.name] = DaemonRuntimeState(
+        let previous = runtimeStates[definition.name]
+        let next = DaemonRuntimeState(
             serverName: definition.name,
             scriptPath: definition.scriptPath,
             status: status,
             pid: pid,
             lastError: lastError
         )
+        runtimeStates[definition.name] = next
+
+        guard hasMeaningfulChange(from: previous, to: next) else {
+            return
+        }
+        onRuntimeStateChanged(previous, next)
     }
 
     private func setRuntimeState(
@@ -305,5 +317,15 @@ final class DaemonManager: ObservableObject {
             .deletingLastPathComponent() // shell
             .deletingLastPathComponent() // repo root
             .path
+    }
+
+    private func hasMeaningfulChange(from previous: DaemonRuntimeState?, to next: DaemonRuntimeState) -> Bool {
+        guard let previous else {
+            return true
+        }
+
+        return previous.status != next.status
+            || previous.pid != next.pid
+            || previous.lastError != next.lastError
     }
 }

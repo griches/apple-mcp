@@ -103,6 +103,28 @@ struct ProductionDashboardView: View {
                     Label("Recent Events", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                 }
 
+                if let approval = production.pendingApproval {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Step \(approval.stepIndex + 1): \(approval.stepDescription)")
+                                .font(.headline)
+                            Text(approval.prompt)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack {
+                                Button("Approve") {
+                                    production.approvePendingStep()
+                                }
+                                Button("Reject") {
+                                    production.rejectPendingStep()
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Approval Required", systemImage: "hand.raised")
+                    }
+                }
+
                 Spacer()
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -170,10 +192,10 @@ struct JobRow: View {
             Text(job.client)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if let error = job.errorMessage, job.status == .failed {
+            if let error = job.errorMessage, (job.status == .failed || job.status == .canceled) {
                 Text(error)
                     .font(.caption2)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(job.status == .canceled ? .orange : .red)
                 Button("Retry") {
                     onRetry()
                 }
@@ -193,6 +215,8 @@ struct JobRow: View {
             return .green
         case .failed:
             return .red
+        case .canceled:
+            return .orange
         }
     }
 }

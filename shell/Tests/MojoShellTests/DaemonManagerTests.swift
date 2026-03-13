@@ -52,4 +52,53 @@ final class DaemonManagerTests: XCTestCase {
         let state = manager.runtimeState(for: first.name)
         XCTAssertEqual(state?.status, .stopped)
     }
+
+    func testRuntimeStateCallbackCapturesDaemonFailure() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-daemon-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        var transitions: [(DaemonRuntimeStatus?, DaemonRuntimeStatus)] = []
+        let manager = DaemonManager(
+            repoRoot: root.path,
+            onRuntimeStateChanged: { previous, current in
+                transitions.append((previous?.status, current.status))
+            }
+        )
+        transitions.removeAll()
+
+        guard let first = manager.serverDefinitions.first else {
+            XCTFail("Expected at least one server definition")
+            return
+        }
+
+        let scriptURL = URL(fileURLWithPath: first.scriptPath)
+        try FileManager.default.createDirectory(at: scriptURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("setTimeout(() => process.exit(1), 20)".utf8).write(to: scriptURL, options: .atomic)
+
+        _ = manager.ensureProcess(for: first.name)
+        try await waitUntil {
+            manager.runtimeState(for: first.name)?.status == .failed
+        }
+
+        let state = manager.runtimeState(for: first.name)
+        XCTAssertEqual(state?.status, .failed)
+        XCTAssertNotNil(state?.lastError)
+        XCTAssertTrue(transitions.contains(where: { $0.1 == .failed }))
+    }
+
+    private func waitUntil(
+        timeoutIterations: Int = 200,
+        condition: @escaping () -> Bool
+    ) async throws {
+        for _ in 0..<timeoutIterations {
+            if condition() {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTFail("Timed out waiting for condition")
+    }
 }

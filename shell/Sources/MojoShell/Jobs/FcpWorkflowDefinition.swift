@@ -22,6 +22,9 @@ struct WorkflowStep: Identifiable, Sendable {
     /// When set, all other action fields are ignored.
     let appActivationName: String?
 
+    /// Optional operator checkpoint before executing this step.
+    let approvalPrompt: String?
+
     /// Delay in seconds AFTER this step executes.
     let delayAfter: TimeInterval
 
@@ -37,6 +40,7 @@ struct WorkflowStep: Identifiable, Sendable {
     /// Does NOT use cmd+tab — directly addresses the target process.
     static func activateApp(
         _ appName: String,
+        approvalPrompt: String? = nil,
         delay: TimeInterval = 0.5
     ) -> WorkflowStep {
         WorkflowStep(
@@ -46,6 +50,7 @@ struct WorkflowStep: Identifiable, Sendable {
             keypress: nil,
             typeText: nil,
             appActivationName: appName,
+            approvalPrompt: approvalPrompt,
             delayAfter: delay
         )
     }
@@ -55,6 +60,7 @@ struct WorkflowStep: Identifiable, Sendable {
         app: String,
         buttonTitled title: String,
         fallback: String? = nil,
+        approvalPrompt: String? = nil,
         delay: TimeInterval = 0.3
     ) -> WorkflowStep {
         WorkflowStep(
@@ -64,6 +70,7 @@ struct WorkflowStep: Identifiable, Sendable {
             keypress: nil,
             typeText: nil,
             appActivationName: nil,
+            approvalPrompt: approvalPrompt,
             delayAfter: delay
         )
     }
@@ -71,6 +78,7 @@ struct WorkflowStep: Identifiable, Sendable {
     static func keypress(
         _ description: String,
         key: String,
+        approvalPrompt: String? = nil,
         delay: TimeInterval = 0.3
     ) -> WorkflowStep {
         WorkflowStep(
@@ -80,6 +88,7 @@ struct WorkflowStep: Identifiable, Sendable {
             keypress: key,
             typeText: nil,
             appActivationName: nil,
+            approvalPrompt: approvalPrompt,
             delayAfter: delay
         )
     }
@@ -87,6 +96,7 @@ struct WorkflowStep: Identifiable, Sendable {
     static func type(
         _ description: String,
         text: String,
+        approvalPrompt: String? = nil,
         delay: TimeInterval = 0.2
     ) -> WorkflowStep {
         WorkflowStep(
@@ -96,6 +106,7 @@ struct WorkflowStep: Identifiable, Sendable {
             keypress: nil,
             typeText: text,
             appActivationName: nil,
+            approvalPrompt: approvalPrompt,
             delayAfter: delay
         )
     }
@@ -103,6 +114,7 @@ struct WorkflowStep: Identifiable, Sendable {
     static func coordinate(
         _ description: String,
         at xy: String,
+        approvalPrompt: String? = nil,
         delay: TimeInterval = 0.3
     ) -> WorkflowStep {
         WorkflowStep(
@@ -112,6 +124,7 @@ struct WorkflowStep: Identifiable, Sendable {
             keypress: nil,
             typeText: nil,
             appActivationName: nil,
+            approvalPrompt: approvalPrompt,
             delayAfter: delay
         )
     }
@@ -160,6 +173,7 @@ enum FcpWorkflowDefinition {
                 "Select '\(shareDestination)'",
                 app: "Final Cut Pro",
                 buttonTitled: shareDestination,
+                approvalPrompt: "Confirm the export destination in Final Cut Pro before MojoShell clicks it.",
                 delay: 0.5
             ),
 
@@ -171,6 +185,7 @@ enum FcpWorkflowDefinition {
                 app: "Final Cut Pro",
                 buttonTitled: "Next…",
                 fallback: nil,
+                approvalPrompt: "Confirm the export sheet is configured correctly before advancing.",
                 delay: 0.5
             ),
         ]
@@ -194,10 +209,19 @@ struct WorkflowExecutor {
         steps: [WorkflowStep],
         sessionId: String,
         onProgress: @escaping (String) -> Void,
-        onStepResult: ((Int, WorkflowStep, ComputerUseResult) -> Void)? = nil
+        onStepResult: ((Int, WorkflowStep, ComputerUseResult) -> Void)? = nil,
+        onApprovalRequested: ((Int, WorkflowStep) async -> Bool)? = nil
     ) async throws {
         for (index, step) in steps.enumerated() {
             onProgress("[\(index + 1)/\(steps.count)] \(step.description)…")
+
+            if step.approvalPrompt != nil {
+                let approved = await onApprovalRequested?(index, step) ?? false
+                if !approved {
+                    throw WorkflowError.approvalRejected(step.description)
+                }
+            }
+
             var stepResult: ComputerUseResult?
 
             if let appName = step.appActivationName {
@@ -265,6 +289,7 @@ struct WorkflowExecutor {
 enum WorkflowError: LocalizedError {
     case elementNotFound(String, String, String)
     case appNotRunning(String)
+    case approvalRejected(String)
 
     var errorDescription: String? {
         switch self {
@@ -272,6 +297,8 @@ enum WorkflowError: LocalizedError {
             return "Could not find '\(title)' (\(role)) in \(app). Is the app open?"
         case .appNotRunning(let name):
             return "\(name) is not running. Open it before starting the workflow."
+        case .approvalRejected(let description):
+            return "Approval rejected for step: \(description)"
         }
     }
 }

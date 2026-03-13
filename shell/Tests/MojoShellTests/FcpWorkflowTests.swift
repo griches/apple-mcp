@@ -66,6 +66,14 @@ final class FcpWorkflowTests: XCTestCase {
             steps.dropFirst(3).first?.axQuery?.titleContaining,
             "Next…"
         )
+        XCTAssertEqual(
+            steps.dropFirst(2).first?.approvalPrompt,
+            "Confirm the export destination in Final Cut Pro before MojoShell clicks it."
+        )
+        XCTAssertEqual(
+            steps.dropFirst(3).first?.approvalPrompt,
+            "Confirm the export sheet is configured correctly before advancing."
+        )
     }
 
     func testMonitoringCheckFirstStepActivatesFCP() {
@@ -157,6 +165,31 @@ final class FcpWorkflowTests: XCTestCase {
         } catch is WorkflowError {
             // expected
         }
+    }
+
+    func testExecutorThrowsWhenApprovalIsRejected() async throws {
+        let stub = CapturingComputerUseProvider()
+        let steps = [
+            WorkflowStep.keypress("Approve Export", key: "cmd+e", approvalPrompt: "Confirm export settings"),
+        ]
+
+        let sessionId = try await stub.startSession()
+        let executor = WorkflowExecutor(provider: stub)
+
+        do {
+            try await executor.run(
+                steps: steps,
+                sessionId: sessionId,
+                onProgress: { _ in },
+                onApprovalRequested: { _, _ in false }
+            )
+            XCTFail("Expected WorkflowError.approvalRejected")
+        } catch WorkflowError.approvalRejected(let description) {
+            XCTAssertEqual(description, "Approve Export")
+        }
+
+        let actions = await stub.executedActions
+        XCTAssertTrue(actions.isEmpty)
     }
 }
 
