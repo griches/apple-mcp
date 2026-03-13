@@ -1,14 +1,14 @@
 import Foundation
 
-enum MediaJobStatus: String, Equatable {
+enum MediaJobStatus: String, Codable, Equatable, Sendable {
     case queued
     case running
     case completed
     case failed
 }
 
-struct MediaJob: Identifiable, Equatable {
-    let id = UUID()
+struct MediaJob: Identifiable, Codable, Equatable, Sendable {
+    let id: UUID
     let name: String
     let client: String
     var status: MediaJobStatus
@@ -16,4 +16,24 @@ struct MediaJob: Identifiable, Equatable {
     let createdAt: Date
     var completedAt: Date?
     var errorMessage: String?
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        client: String,
+        status: MediaJobStatus,
+        progress: Double,
+        createdAt: Date,
+        completedAt: Date?,
+        errorMessage: String?
+    ) {
+        self.id = id
+        self.name = name
+        self.client = client
+        self.status = status
+        self.progress = progress
+        self.createdAt = createdAt
+        self.completedAt = completedAt
+        self.errorMessage = errorMessage
+    }
 }

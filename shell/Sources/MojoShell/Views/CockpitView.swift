@@ -235,22 +235,36 @@ struct CockpitView: View {
                 }
 
                 Divider()
-                Label("Active Servers", systemImage: "server.rack")
-                    .font(.headline)
+                HStack {
+                    Label("Daemon Health", systemImage: "server.rack")
+                        .font(.headline)
+                    Spacer()
+                    Button("Restart All") {
+                        appState.daemons.restartAll()
+                    }
+                }
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if appState.daemons.runningServers.isEmpty {
-                            Text("No MCP daemons are currently running.")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(Array(appState.daemons.runningServers.keys.sorted()), id: \.self) { name in
-                                HStack {
-                                    Circle()
-                                        .fill(.green)
-                                        .frame(width: 8, height: 8)
-                                    Text(name)
-                                        .font(.system(.body, design: .monospaced))
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(appState.daemons.allRuntimeStates) { state in
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(daemonStatusColor(state.status))
+                                    .frame(width: 8, height: 8)
+                                Text(state.serverName)
+                                    .font(.system(.body, design: .monospaced))
+                                Text(state.status.rawValue)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                if let error = state.lastError, !error.isEmpty {
+                                    Text(error)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Button("Restart") {
+                                    appState.daemons.restart(serverName: state.serverName)
                                 }
                             }
                         }
@@ -276,6 +290,24 @@ struct CockpitView: View {
                 }
                 await loadNowPlaying(triggeredByPoll: true)
             }
+        }
+        .onAppear {
+            appState.daemons.refreshRuntimeStates()
+        }
+    }
+
+    private func daemonStatusColor(_ status: DaemonRuntimeStatus) -> Color {
+        switch status {
+        case .running:
+            return .green
+        case .starting:
+            return .blue
+        case .stopped:
+            return .gray
+        case .notBuilt:
+            return .orange
+        case .failed:
+            return .red
         }
     }
 

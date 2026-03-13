@@ -1,6 +1,7 @@
 import XCTest
 @testable import MojoShell
 
+@MainActor
 final class FcpWorkflowTests: XCTestCase {
 
     // MARK: - WorkflowStep factories

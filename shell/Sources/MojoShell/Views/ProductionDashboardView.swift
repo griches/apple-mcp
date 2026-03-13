@@ -3,49 +3,39 @@ import SwiftUI
 struct ProductionDashboardView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var readiness: ReadinessState
-    @State private var jobs: [MediaJob] = [
-        MediaJob(
-            name: "Appalachian Community FCU — Benefits Overview",
-            client: "ElanPresentation",
-            status: .completed,
-            progress: 1.0,
-            createdAt: Date().addingTimeInterval(-3600),
-            completedAt: Date(),
-            errorMessage: nil
-        ),
-        MediaJob(
-            name: "FedChoice FCU — Enrollment Video",
-            client: "ElanPresentation",
-            status: .running,
-            progress: 0.62,
-            createdAt: Date().addingTimeInterval(-600),
-            completedAt: nil,
-            errorMessage: nil
-        ),
-        MediaJob(
-            name: "Credit Union 1 — Annual Benefits",
-            client: "ElanPresentation",
-            status: .queued,
-            progress: 0.0,
-            createdAt: Date(),
-            completedAt: nil,
-            errorMessage: nil
-        ),
-    ]
-    @State private var workflowLog = "Ready. Use 'Discover FCP Elements' first to verify accessibility access, then 'Run Assembly Workflow' to trigger the share dialog."
-    @State private var isRunningWorkflow = false
+    @EnvironmentObject private var production: ProductionController
+
     @State private var discoveredElements: [FoundAXElement] = []
     @State private var isDiscovering = false
 
     var body: some View {
         HSplitView {
             VStack(alignment: .leading, spacing: 0) {
-                Label("Job Queue", systemImage: "list.bullet.rectangle")
-                    .font(.headline)
-                    .padding()
+                HStack {
+                    Label("Job Queue", systemImage: "list.bullet.rectangle")
+                        .font(.headline)
+                    Spacer()
+                    Button("Queue Job") {
+                        queueDefaultJob()
+                    }
+                }
+                .padding()
+
                 Divider()
-                List(jobs) { job in
-                    JobRow(job: job)
+
+                if production.jobs.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No jobs yet")
+                            .font(.headline)
+                        Text("Queue a job, then run assembly.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding()
+                } else {
+                    List(production.jobs) { job in
+                        JobRow(job: job)
+                    }
                 }
             }
             .frame(minWidth: 360)
@@ -54,6 +44,7 @@ struct ProductionDashboardView: View {
                 Label("FCP / Motion", systemImage: "film.stack")
                     .font(.headline)
                 Divider()
+
                 HStack {
                     Text("Provider: \(appState.computerUseProviderName)")
                     Spacer()
@@ -83,22 +74,40 @@ struct ProductionDashboardView: View {
                             }
                         }
                     } label: {
-                        Label("Final Cut Pro — \(discoveredElements.count) elements", systemImage: "list.bullet.rectangle.portrait")
+                        Label("Final Cut Pro - \(discoveredElements.count) elements", systemImage: "list.bullet.rectangle.portrait")
                     }
                 }
 
                 Divider()
+
                 ScrollView {
-                    Text(workflowLog)
+                    Text(production.workflowLog)
                         .font(.system(.caption, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Spacer()
-                VStack(alignment: .leading, spacing: 4) {
-                    Button(isRunningWorkflow ? "Running..." : "Run Assembly Workflow") {
-                        Task { await runAssemblyWorkflow() }
+
+                GroupBox {
+                    if production.recentEvents.isEmpty {
+                        Text("No events yet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ForEach(Array(production.recentEvents.suffix(8).reversed())) { event in
+                            EventRow(event: event)
+                        }
                     }
-                    .disabled(isRunningWorkflow || !readiness.isReady(for: .computerUse))
+                } label: {
+                    Label("Recent Events", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                }
+
+                Spacer()
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Button(production.isRunningWorkflow ? "Running..." : "Run Assembly Workflow") {
+                        Task { await production.runNextAssemblyWorkflow() }
+                    }
+                    .disabled(production.isRunningWorkflow || !readiness.isReady(for: .computerUse))
 
                     if !readiness.isReady(for: .computerUse),
                        let issue = readiness.blockingIssue(for: .computerUse) {
@@ -109,7 +118,7 @@ struct ProductionDashboardView: View {
                 }
             }
             .padding()
-            .frame(minWidth: 280)
+            .frame(minWidth: 320)
         }
         .navigationTitle("Production")
         .task {
@@ -117,87 +126,23 @@ struct ProductionDashboardView: View {
         }
     }
 
+    private func queueDefaultJob() {
+        let stamp = Date().formatted(date: .abbreviated, time: .shortened)
+        production.queueAssemblyJob(name: "Assembly - \(stamp)", client: "Manual")
+    }
+
     private func discoverFcpElements() async {
         isDiscovering = true
-        workflowLog = "Scanning Final Cut Pro accessibility tree…"
+        production.workflowLog = "Scanning Final Cut Pro accessibility tree..."
         do {
             let elements = try AccessibilityElementFinder.findButtons(inApp: "Final Cut Pro")
             discoveredElements = elements
-            workflowLog = "Found \(elements.count) buttons in Final Cut Pro. Coordinates are in global screen space (origin = top-left of primary display)."
+            production.workflowLog = "Found \(elements.count) buttons in Final Cut Pro. Coordinates are in global screen space (origin = top-left of primary display)."
         } catch {
-            workflowLog = "Discovery error: \(error.localizedDescription)"
+            production.workflowLog = "Discovery error: \(error.localizedDescription)"
             discoveredElements = []
         }
         isDiscovering = false
-    }
-
-    private func runAssemblyWorkflow() async {
-        guard let queuedIndex = jobs.firstIndex(where: { $0.status == .queued }) else {
-            workflowLog = "No queued media job available."
-            return
-        }
-
-        isRunningWorkflow = true
-
-        // Preflight: verify FCP is running and has an exportable selection before starting a session.
-        // "Export File (default)…" only appears in the AX tree when a project/clip is selected.
-        workflowLog = "Checking Final Cut Pro export state…"
-        do {
-            let exportItems = try AccessibilityElementFinder.findElements(
-                inApp: "Final Cut Pro",
-                roles: ["AXMenuItem"],
-                titleContaining: "Export File"
-            )
-            guard !exportItems.isEmpty else {
-                workflowLog = "No exportable clip selected in Final Cut Pro. Select a timeline item and try again."
-                isRunningWorkflow = false
-                return
-            }
-        } catch AccessibilityElementFinder.FinderError.appNotRunning {
-            workflowLog = "Final Cut Pro is not running. Open it and load a project first."
-            isRunningWorkflow = false
-            return
-        } catch AccessibilityElementFinder.FinderError.accessibilityPermissionDenied {
-            workflowLog = "Accessibility permission denied. Grant access in System Settings → Privacy & Security → Accessibility."
-            isRunningWorkflow = false
-            return
-        } catch {
-            workflowLog = "Preflight error: \(error.localizedDescription)"
-            isRunningWorkflow = false
-            return
-        }
-
-        jobs[queuedIndex].status = .running
-        jobs[queuedIndex].progress = 0.15
-        workflowLog = "Starting assembly workflow…"
-
-        var sessionId: String?
-        do {
-            sessionId = try await appState.computerUseProvider.startSession()
-            let steps = FcpWorkflowDefinition.assemblyWorkflow()
-            let executor = WorkflowExecutor(provider: appState.computerUseProvider)
-
-            try await executor.run(steps: steps, sessionId: sessionId!) { [self] message in
-                Task { @MainActor in
-                    workflowLog = message
-                }
-            }
-
-            try await appState.computerUseProvider.stopSession(sessionId: sessionId!)
-            sessionId = nil
-            jobs[queuedIndex].status = .completed
-            jobs[queuedIndex].progress = 1.0
-            jobs[queuedIndex].completedAt = Date()
-        } catch {
-            if let id = sessionId {
-                try? await appState.computerUseProvider.stopSession(sessionId: id)
-            }
-            jobs[queuedIndex].status = .failed
-            jobs[queuedIndex].errorMessage = error.localizedDescription
-            workflowLog = "Error: \(error.localizedDescription)"
-        }
-
-        isRunningWorkflow = false
     }
 }
 
@@ -222,6 +167,11 @@ struct JobRow: View {
             Text(job.client)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if let error = job.errorMessage, job.status == .failed {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -236,6 +186,33 @@ struct JobRow: View {
             return .green
         case .failed:
             return .red
+        }
+    }
+}
+
+private struct EventRow: View {
+    let event: JobEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(event.timestamp.formatted(date: .omitted, time: .standard))
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 80, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.type.rawValue)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(event.message)
+                    .font(.caption)
+                if let screenshotPath = event.screenshotPath {
+                    Text(screenshotPath)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer()
         }
     }
 }

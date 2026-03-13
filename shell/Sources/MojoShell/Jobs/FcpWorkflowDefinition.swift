@@ -189,13 +189,16 @@ enum FcpWorkflowDefinition {
 struct WorkflowExecutor {
     let provider: any ComputerUseProvider
 
+    @MainActor
     func run(
         steps: [WorkflowStep],
         sessionId: String,
-        onProgress: @escaping @Sendable (String) -> Void
+        onProgress: @escaping (String) -> Void,
+        onStepResult: ((Int, WorkflowStep, ComputerUseResult) -> Void)? = nil
     ) async throws {
         for (index, step) in steps.enumerated() {
             onProgress("[\(index + 1)/\(steps.count)] \(step.description)…")
+            var stepResult: ComputerUseResult?
 
             if let appName = step.appActivationName {
                 let activated = await MainActor.run {
@@ -208,26 +211,30 @@ struct WorkflowExecutor {
                     throw WorkflowError.appNotRunning(appName)
                 }
             } else if let keypress = step.keypress {
-                _ = try await provider.execute(
+                stepResult = try await provider.execute(
                     sessionId: sessionId,
                     action: ComputerUseAction(type: .keypress, target: keypress)
                 )
             } else if let text = step.typeText {
-                _ = try await provider.execute(
+                stepResult = try await provider.execute(
                     sessionId: sessionId,
                     action: ComputerUseAction(type: .type, target: text)
                 )
             } else if let query = step.axQuery {
                 let target = try resolveAXTarget(query: query, fallback: step.fallbackCoordinates)
-                _ = try await provider.execute(
+                stepResult = try await provider.execute(
                     sessionId: sessionId,
                     action: ComputerUseAction(type: .click, target: target)
                 )
             } else if let coords = step.fallbackCoordinates {
-                _ = try await provider.execute(
+                stepResult = try await provider.execute(
                     sessionId: sessionId,
                     action: ComputerUseAction(type: .click, target: coords)
                 )
+            }
+
+            if let stepResult {
+                onStepResult?(index, step, stepResult)
             }
 
             if step.delayAfter > 0 {
