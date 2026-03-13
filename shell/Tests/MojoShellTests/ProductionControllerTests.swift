@@ -325,6 +325,56 @@ final class ProductionControllerTests: XCTestCase {
         XCTAssertNil(controller.jobs.first?.errorMessage)
     }
 
+    func testEventsForJobReturnsOnlyMatchingHistory() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let jobOne = MediaJob(
+            id: UUID(),
+            name: "Job One",
+            client: "QA",
+            status: .completed,
+            progress: 1.0,
+            createdAt: Date(),
+            completedAt: Date(),
+            errorMessage: nil
+        )
+        let jobTwo = MediaJob(
+            id: UUID(),
+            name: "Job Two",
+            client: "QA",
+            status: .queued,
+            progress: 0.0,
+            createdAt: Date().addingTimeInterval(-60),
+            completedAt: nil,
+            errorMessage: nil
+        )
+
+        let jobStore = JobStore(fileURL: root.appendingPathComponent("jobs.json"))
+        try jobStore.save([jobOne, jobTwo])
+
+        let eventStore = JobEventStore(fileURL: root.appendingPathComponent("events.json"))
+        try eventStore.save([
+            JobEvent(jobID: jobOne.id, timestamp: Date(), type: .completed, message: "one"),
+            JobEvent(jobID: jobTwo.id, timestamp: Date().addingTimeInterval(-10), type: .queued, message: "two"),
+        ])
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: jobStore,
+            eventStore: eventStore,
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            stepsProvider: { [] }
+        )
+
+        let events = controller.events(for: jobOne.id)
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.first?.message, "one")
+    }
+
     private func waitUntil(
         timeoutIterations: Int = 100,
         condition: @escaping () -> Bool

@@ -150,6 +150,50 @@ final class AppStateTests: XCTestCase {
             XCTFail("Expected native tool execution success, got \(error)")
         }
     }
+
+    func testOpenFinderSelectionInPreviewUsesNativeSelectionTool() async {
+        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
+        let executor = MCPToolExecutor(daemonManager: daemonManager)
+        let nativeExecutor = FakeNativeToolExecutor()
+        let appState = AppState(
+            daemons: daemonManager,
+            executor: executor,
+            computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: nativeExecutor
+        )
+
+        let result = await appState.openFinderSelectionInPreview()
+
+        switch result {
+        case .success:
+            let invocation = await nativeExecutor.invocations.last
+            XCTAssertEqual(invocation?.tool, NativeToolName.finderSelectionOpenInPreview.rawValue)
+        case .failure(let error):
+            XCTFail("Expected preview selection success, got \(error)")
+        }
+    }
+
+    func testOpenRepoInTerminalUsesNativeTerminalTool() async {
+        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
+        let executor = MCPToolExecutor(daemonManager: daemonManager)
+        let nativeExecutor = FakeNativeToolExecutor()
+        let appState = AppState(
+            daemons: daemonManager,
+            executor: executor,
+            computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: nativeExecutor
+        )
+
+        let result = await appState.openRepoInTerminal()
+
+        switch result {
+        case .success:
+            let invocation = await nativeExecutor.invocations.last
+            XCTAssertEqual(invocation?.tool, NativeToolName.terminalOpenRepo.rawValue)
+        case .failure(let error):
+            XCTFail("Expected terminal open success, got \(error)")
+        }
+    }
 }
 
 // MARK: - Test doubles
@@ -171,8 +215,16 @@ actor FakeComputerUseProvider: ComputerUseProvider {
 }
 
 actor FakeNativeToolExecutor: NativeToolExecuting {
-    func execute(tool: String, arguments _: [String: AnyCodable]) async throws -> MCPToolExecutionResult {
-        MCPToolExecutionResult(server: NativeToolExecutor.serverName, tool: tool, text: "native result")
+    struct Invocation: Equatable {
+        let tool: String
+        let arguments: [String: AnyCodable]
+    }
+
+    private(set) var invocations: [Invocation] = []
+
+    func execute(tool: String, arguments: [String: AnyCodable]) async throws -> MCPToolExecutionResult {
+        invocations.append(Invocation(tool: tool, arguments: arguments))
+        return MCPToolExecutionResult(server: NativeToolExecutor.serverName, tool: tool, text: "native result")
     }
 }
 

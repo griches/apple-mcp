@@ -11,8 +11,16 @@ enum NativeToolName: String, Sendable {
     case finderRevealPath = "finder_reveal_path"
     case finderRevealBrainFile = "finder_reveal_brain_file"
     case finderListSelection = "finder_list_selection"
+    case finderSelectionOpenInPreview = "finder_selection_open_in_preview"
+    case finderSelectionOpenInPhotos = "finder_selection_open_in_photos"
     case safariOpenURL = "safari_open_url"
     case safariCurrentTab = "safari_current_tab"
+    case terminalOpenRepo = "terminal_open_repo"
+    case terminalRunCommand = "terminal_run_command"
+    case itermOpenRepo = "iterm_open_repo"
+    case itermRunCommand = "iterm_run_command"
+    case previewOpenPath = "preview_open_path"
+    case photosImportPath = "photos_import_path"
     case shortcutsList = "shortcuts_list"
     case shortcutsRun = "shortcuts_run"
     case systemSettingsOpen = "system_settings_open"
@@ -121,6 +129,24 @@ actor NativeToolExecutor: NativeToolExecuting {
                 payload: .array(selection.map(AnyCodable.string))
             )
 
+        case .finderSelectionOpenInPreview:
+            let path = try await firstFinderSelectionPath()
+            try await openFile(path: path, appName: "Preview")
+            return result(
+                tool: tool,
+                text: "Opened Finder selection in Preview: \(path)",
+                payload: .object(["path": .string(path), "application": .string("Preview")])
+            )
+
+        case .finderSelectionOpenInPhotos:
+            let path = try await firstFinderSelectionPath()
+            try await openFile(path: path, appName: "Photos")
+            return result(
+                tool: tool,
+                text: "Opened Finder selection in Photos: \(path)",
+                payload: .object(["path": .string(path), "application": .string("Photos")])
+            )
+
         case .safariOpenURL:
             let rawURL = try requiredString("url", from: arguments)
             guard let normalizedURL = normalizedURL(from: rawURL) else {
@@ -138,6 +164,66 @@ actor NativeToolExecutor: NativeToolExecuting {
                     "title": .string(tab.title),
                     "url": .string(tab.url),
                 ])
+            )
+
+        case .terminalOpenRepo:
+            try ensurePathExists(repoRoot)
+            try await openApplication("Terminal", path: repoRoot)
+            return result(
+                tool: tool,
+                text: "Opened repo root in Terminal: \(repoRoot)",
+                payload: .object(["path": .string(repoRoot), "application": .string("Terminal")])
+            )
+
+        case .terminalRunCommand:
+            let command = try requiredString("command", from: arguments)
+            let path = optionalString("path", from: arguments).map(expandPath) ?? repoRoot
+            try ensurePathExists(path)
+            try await appleAutomation.runTerminalCommand(command, in: path)
+            return result(
+                tool: tool,
+                text: "Ran command in Terminal: \(command)",
+                payload: .object(["command": .string(command), "path": .string(path)])
+            )
+
+        case .itermOpenRepo:
+            try ensurePathExists(repoRoot)
+            try await appleAutomation.runITermCommand("clear", in: repoRoot)
+            return result(
+                tool: tool,
+                text: "Opened repo root in iTerm: \(repoRoot)",
+                payload: .object(["path": .string(repoRoot), "application": .string("iTerm")])
+            )
+
+        case .itermRunCommand:
+            let command = try requiredString("command", from: arguments)
+            let path = optionalString("path", from: arguments).map(expandPath) ?? repoRoot
+            try ensurePathExists(path)
+            try await appleAutomation.runITermCommand(command, in: path)
+            return result(
+                tool: tool,
+                text: "Ran command in iTerm: \(command)",
+                payload: .object(["command": .string(command), "path": .string(path)])
+            )
+
+        case .previewOpenPath:
+            let path = expandPath(try requiredString("path", from: arguments))
+            try ensurePathExists(path)
+            try await openFile(path: path, appName: "Preview")
+            return result(
+                tool: tool,
+                text: "Opened in Preview: \(path)",
+                payload: .object(["path": .string(path), "application": .string("Preview")])
+            )
+
+        case .photosImportPath:
+            let path = expandPath(try requiredString("path", from: arguments))
+            try ensurePathExists(path)
+            try await openFile(path: path, appName: "Photos")
+            return result(
+                tool: tool,
+                text: "Opened in Photos: \(path)",
+                payload: .object(["path": .string(path), "application": .string("Photos")])
             )
 
         case .shortcutsList:
@@ -208,6 +294,23 @@ actor NativeToolExecutor: NativeToolExecuting {
         guard FileManager.default.fileExists(atPath: path) else {
             throw NativeToolError.pathNotFound(path)
         }
+    }
+
+    private func firstFinderSelectionPath() async throws -> String {
+        let selection = try await appleAutomation.listFinderSelection()
+        guard let first = selection.first else {
+            throw NativeToolError.commandFailed("Finder selection is empty.")
+        }
+        try ensurePathExists(first)
+        return first
+    }
+
+    private func openApplication(_ appName: String, path: String) async throws {
+        _ = try await commandRunner("/usr/bin/open", ["-a", appName, path], nil)
+    }
+
+    private func openFile(path: String, appName: String) async throws {
+        _ = try await commandRunner("/usr/bin/open", ["-a", appName, path], nil)
     }
 
     private func systemSettingsURL(for pane: String) -> URL? {
@@ -324,6 +427,32 @@ private actor ScriptBackedAppleAutomation: AppleAutomationProviding {
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
         return SafariTabState(title: lines.first ?? "Unknown", url: lines.dropFirst().first ?? "")
+    }
+
+    func runTerminalCommand(_ command: String, in path: String) async throws {
+        _ = try await scriptRunner("""
+        tell application "Terminal"
+            activate
+            if (count of windows) is 0 then
+                do script ""
+            end if
+            do script "cd " & quoted form of "\(escape(path))" & "; " & "\(escape(command))" in front window
+        end tell
+        """)
+    }
+
+    func runITermCommand(_ command: String, in path: String) async throws {
+        _ = try await scriptRunner("""
+        tell application "iTerm"
+            activate
+            if (count of windows) is 0 then
+                create window with default profile
+            end if
+            tell current session of current window
+                write text "cd " & quoted form of "\(escape(path))" & "; " & "\(escape(command))"
+            end tell
+        end tell
+        """)
     }
 
     private func escape(_ value: String) -> String {

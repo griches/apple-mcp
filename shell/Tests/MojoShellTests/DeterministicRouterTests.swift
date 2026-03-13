@@ -38,6 +38,25 @@ final class DeterministicRouterTests: XCTestCase {
         XCTAssertEqual(result?.arguments["input"], .string("inbox summary"))
     }
 
+    func testOpenRepoInTerminalRoutesToNativeTool() {
+        let result = router.route("open repo in terminal")
+        XCTAssertEqual(result?.server, NativeToolExecutor.serverName)
+        XCTAssertEqual(result?.tool, NativeToolName.terminalOpenRepo.rawValue)
+    }
+
+    func testOpenFinderSelectionInPreviewRoutesToNativeTool() {
+        let result = router.route("open finder selection in preview")
+        XCTAssertEqual(result?.server, NativeToolExecutor.serverName)
+        XCTAssertEqual(result?.tool, NativeToolName.finderSelectionOpenInPreview.rawValue)
+    }
+
+    func testRunCommandInITermParsesDynamicRoute() {
+        let result = router.route("run git status in iterm")
+        XCTAssertEqual(result?.server, NativeToolExecutor.serverName)
+        XCTAssertEqual(result?.tool, NativeToolName.itermRunCommand.rawValue)
+        XCTAssertEqual(result?.arguments["command"], .string("git status"))
+    }
+
     func testFCPIntentFallsBack() {
         let result = router.route("export the current FCP timeline")
         XCTAssertNil(result)

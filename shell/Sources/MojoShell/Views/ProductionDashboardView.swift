@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ProductionDashboardView: View {
@@ -12,6 +13,8 @@ struct ProductionDashboardView: View {
     @State private var newExportTargetName = ""
     @State private var newExportTargetPath = ""
     @State private var exportTargetStatus = ""
+    @State private var selectedJobID: UUID?
+    @State private var selectedArtifactPath: String?
 
     var body: some View {
         HSplitView {
@@ -85,9 +88,12 @@ struct ProductionDashboardView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     } else {
-                        List(production.jobs) { job in
-                            JobRow(job: job) {
-                                production.retryFailedJob(id: job.id)
+                        List(selection: $selectedJobID) {
+                            ForEach(production.jobs) { job in
+                                JobRow(job: job) {
+                                    production.retryFailedJob(id: job.id)
+                                }
+                                .tag(job.id)
                             }
                         }
                         .frame(minHeight: 260)
@@ -135,6 +141,101 @@ struct ProductionDashboardView: View {
                     }
                 } label: {
                     Label("Preset Detail", systemImage: "slider.horizontal.3")
+                }
+
+                if let selectedJob {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(selectedJob.name)
+                                        .font(.headline)
+                                    Text(selectedJob.client)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(selectedJob.status.rawValue.capitalized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            HStack(spacing: 12) {
+                                Text("Created \(selectedJob.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                                if let completedAt = selectedJob.completedAt {
+                                    Text("Completed \(completedAt.formatted(date: .abbreviated, time: .shortened))")
+                                }
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                            if let preset = selectedJob.workflowPreset {
+                                Text("Preset: \(preset.title)")
+                                    .font(.caption)
+                            }
+
+                            if let targetPath = selectedJob.exportTargetPath {
+                                HStack {
+                                    Text(targetPath)
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                    Spacer()
+                                    Button("Open Target") {
+                                        Task { _ = await appState.openFinderPath(targetPath) }
+                                    }
+                                }
+                            }
+
+                            let jobEvents = selectedJobEvents
+                            if jobEvents.isEmpty {
+                                Text("No recorded events for this job yet.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ScrollView {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        ForEach(jobEvents) { event in
+                                            InspectableEventRow(
+                                                event: event,
+                                                isSelectedArtifact: event.screenshotPath == activeArtifactPath
+                                            ) { artifactPath in
+                                                selectedArtifactPath = artifactPath
+                                            }
+                                        }
+                                    }
+                                }
+                                .frame(minHeight: 180)
+                            }
+                        }
+                    } label: {
+                        Label("Selected Job", systemImage: "doc.text.magnifyingglass")
+                    }
+
+                    if let artifactPath = activeArtifactPath {
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(artifactPath)
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                                    .lineLimit(2)
+
+                                ArtifactPreview(path: artifactPath)
+
+                                HStack {
+                                    Button("Preview") {
+                                        Task { _ = await appState.openPathInPreview(artifactPath) }
+                                    }
+                                    Button("Reveal") {
+                                        Task { _ = await appState.revealFinderPath(artifactPath) }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label("Artifact Preview", systemImage: "photo")
+                        }
+                    }
                 }
 
                 if !discoveredElements.isEmpty {
@@ -233,6 +334,9 @@ struct ProductionDashboardView: View {
             if selectedExportTargetID == nil {
                 selectedExportTargetID = production.defaultExportTarget?.id
             }
+            if selectedJobID == nil {
+                selectedJobID = production.jobs.first?.id
+            }
         }
     }
 
@@ -248,6 +352,28 @@ struct ProductionDashboardView: View {
             return "Default (\(target.name))"
         }
         return "No default target"
+    }
+
+    private var selectedJob: MediaJob? {
+        if let selectedJobID, let selected = production.jobs.first(where: { $0.id == selectedJobID }) {
+            return selected
+        }
+        return production.jobs.first
+    }
+
+    private var selectedJobEvents: [JobEvent] {
+        guard let selectedJob else {
+            return []
+        }
+        return production.events(for: selectedJob.id)
+    }
+
+    private var activeArtifactPath: String? {
+        if let selectedArtifactPath,
+           selectedJobEvents.contains(where: { $0.screenshotPath == selectedArtifactPath }) {
+            return selectedArtifactPath
+        }
+        return selectedJobEvents.compactMap(\.screenshotPath).first
     }
 
     private func targetLabel(for target: ExportTarget) -> String {
@@ -394,6 +520,72 @@ private struct EventRow: View {
                 }
             }
             Spacer()
+        }
+    }
+}
+
+private struct InspectableEventRow: View {
+    let event: JobEvent
+    let isSelectedArtifact: Bool
+    let onSelectArtifact: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(event.timestamp.formatted(date: .omitted, time: .standard))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 80, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(event.type.rawValue)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(event.message)
+                        .font(.caption)
+                    if let progress = event.progress {
+                        Text("Progress \(Int(progress * 100))%")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            if let screenshotPath = event.screenshotPath {
+                HStack {
+                    Text(screenshotPath)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                    Spacer()
+                    Button(isSelectedArtifact ? "Selected" : "Inspect") {
+                        onSelectArtifact(screenshotPath)
+                    }
+                    .disabled(isSelectedArtifact)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct ArtifactPreview: View {
+    let path: String
+
+    var body: some View {
+        Group {
+            if let image = NSImage(contentsOfFile: path) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 220)
+                    .background(.background)
+            } else {
+                Text("No image preview available for this artifact.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
+            }
         }
     }
 }

@@ -111,6 +111,91 @@ final class NativeToolExecutorTests: XCTestCase {
             .array([.string("Daily Brief"), .string("Export Deliverable")])
         )
     }
+
+    func testTerminalOpenRepoUsesOpenApplication() async throws {
+        let capture = CommandCapture()
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let executor = NativeToolExecutor(
+            repoRoot: tempRoot.path,
+            appleScriptRunner: { _ in "" },
+            commandRunner: { executable, arguments, stdin in
+                await capture.record(executable: executable, arguments: arguments, stdin: stdin)
+                return ""
+            },
+            urlOpener: { _ in true }
+        )
+
+        let result = try await executor.execute(
+            tool: NativeToolName.terminalOpenRepo.rawValue,
+            arguments: [:]
+        )
+
+        let invocation = await capture.invocations.first
+        XCTAssertEqual(invocation?.executable, "/usr/bin/open")
+        XCTAssertEqual(invocation?.arguments, ["-a", "Terminal", tempRoot.path])
+        XCTAssertEqual(result.text, "Opened repo root in Terminal: \(tempRoot.path)")
+    }
+
+    func testTerminalRunCommandUsesAppleScriptAdapter() async throws {
+        let capture = ScriptCapture()
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let executor = NativeToolExecutor(
+            repoRoot: tempRoot.path,
+            appleScriptRunner: { script in
+                await capture.record(script)
+                return ""
+            },
+            commandRunner: { _, _, _ in "" },
+            urlOpener: { _ in true }
+        )
+
+        let result = try await executor.execute(
+            tool: NativeToolName.terminalRunCommand.rawValue,
+            arguments: ["command": .string("pwd"), "path": .string(tempRoot.path)]
+        )
+
+        let script = await capture.scripts.last
+        XCTAssertTrue(script?.contains("tell application \"Terminal\"") ?? false)
+        XCTAssertTrue(script?.contains("pwd") ?? false)
+        XCTAssertTrue(script?.contains(tempRoot.path) ?? false)
+        XCTAssertEqual(result.text, "Ran command in Terminal: pwd")
+    }
+
+    func testPreviewOpenPathUsesOpenApplication() async throws {
+        let capture = CommandCapture()
+        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).txt")
+        try XCTUnwrap("hello".data(using: .utf8)).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let executor = NativeToolExecutor(
+            repoRoot: "/tmp/apple-mcp",
+            appleScriptRunner: { _ in "" },
+            commandRunner: { executable, arguments, stdin in
+                await capture.record(executable: executable, arguments: arguments, stdin: stdin)
+                return ""
+            },
+            urlOpener: { _ in true }
+        )
+
+        let result = try await executor.execute(
+            tool: NativeToolName.previewOpenPath.rawValue,
+            arguments: ["path": .string(fileURL.path)]
+        )
+
+        let invocation = await capture.invocations.first
+        XCTAssertEqual(invocation?.executable, "/usr/bin/open")
+        XCTAssertEqual(invocation?.arguments, ["-a", "Preview", fileURL.path])
+        XCTAssertEqual(
+            result.payload,
+            .object(["path": .string(fileURL.path), "application": .string("Preview")])
+        )
+    }
 }
 
 private actor ScriptCapture {

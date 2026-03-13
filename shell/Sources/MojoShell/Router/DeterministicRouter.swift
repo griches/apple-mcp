@@ -156,6 +156,22 @@ struct DeterministicRouter {
             )
         ),
         Rule(
+            phrases: ["open finder selection in preview", "preview finder selection"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderSelectionOpenInPreview.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["open finder selection in photos", "photos finder selection"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderSelectionOpenInPhotos.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
             phrases: ["finder selection", "what is selected in finder", "what's selected in finder"],
             resolvedTool: ResolvedTool(
                 server: NativeToolExecutor.serverName,
@@ -168,6 +184,22 @@ struct DeterministicRouter {
             resolvedTool: ResolvedTool(
                 server: NativeToolExecutor.serverName,
                 tool: NativeToolName.safariCurrentTab.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["open repo in terminal", "open terminal in repo", "open repo terminal"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.terminalOpenRepo.rawValue,
+                arguments: [:]
+            )
+        ),
+        Rule(
+            phrases: ["open repo in iterm", "open iterm in repo", "open repo iterm"],
+            resolvedTool: ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.itermOpenRepo.rawValue,
                 arguments: [:]
             )
         ),
@@ -248,6 +280,16 @@ struct DeterministicRouter {
                 description: "Run a named shortcut. Arguments: {name, input?}",
                 server: NativeToolExecutor.serverName
             ),
+            LLMToolDefinition(
+                name: NativeToolName.terminalRunCommand.rawValue,
+                description: "Run a shell command in Terminal. Arguments: {command, path?}",
+                server: NativeToolExecutor.serverName
+            ),
+            LLMToolDefinition(
+                name: NativeToolName.itermRunCommand.rawValue,
+                description: "Run a shell command in iTerm. Arguments: {command, path?}",
+                server: NativeToolExecutor.serverName
+            ),
         ]
     }
 
@@ -300,7 +342,44 @@ struct DeterministicRouter {
             }
         }
 
+        if let route = shellRunRoute(
+            raw: raw,
+            normalized: normalized,
+            suffix: " in terminal",
+            tool: NativeToolName.terminalRunCommand.rawValue
+        ) {
+            return route
+        }
+
+        if let route = shellRunRoute(
+            raw: raw,
+            normalized: normalized,
+            suffix: " in iterm",
+            tool: NativeToolName.itermRunCommand.rawValue
+        ) {
+            return route
+        }
+
         return nil
+    }
+
+    private func shellRunRoute(raw: String, normalized: String, suffix: String, tool: String) -> ResolvedTool? {
+        guard normalized.hasPrefix("run "), normalized.hasSuffix(suffix) else {
+            return nil
+        }
+
+        let start = raw.index(raw.startIndex, offsetBy: 4)
+        let end = raw.index(raw.endIndex, offsetBy: -suffix.count)
+        let command = String(raw[start..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !command.isEmpty else {
+            return nil
+        }
+
+        return ResolvedTool(
+            server: NativeToolExecutor.serverName,
+            tool: tool,
+            arguments: ["command": .string(command)]
+        )
     }
 
     private func safariURL(from target: String) -> String? {

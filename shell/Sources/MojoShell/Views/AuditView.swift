@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct AuditView: View {
+    @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var audit: AuditController
     @State private var selectedCategory: AuditCategory?
 
@@ -46,14 +47,7 @@ struct AuditView: View {
                             .textSelection(.enabled)
                         if !event.metadata.isEmpty {
                             ForEach(event.metadata.keys.sorted(), id: \.self) { key in
-                                HStack(alignment: .top, spacing: 4) {
-                                    Text(key)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    Text(event.metadata[key] ?? "")
-                                        .font(.caption2)
-                                        .textSelection(.enabled)
-                                }
+                                AuditMetadataRow(key: key, value: event.metadata[key] ?? "")
                             }
                         }
                     }
@@ -71,5 +65,48 @@ struct AuditView: View {
             return audit.events
         }
         return audit.events.filter { $0.category == selectedCategory }
+    }
+}
+
+private struct AuditMetadataRow: View {
+    @EnvironmentObject private var appState: AppState
+
+    let key: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 4) {
+                Text(key)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption2)
+                    .textSelection(.enabled)
+            }
+
+            if let path = inspectablePath {
+                HStack {
+                    Button("Preview") {
+                        Task { _ = await appState.openPathInPreview(path) }
+                    }
+                    Button("Reveal") {
+                        Task { _ = await appState.revealFinderPath(path) }
+                    }
+                }
+                .font(.caption2)
+            }
+        }
+    }
+
+    private var inspectablePath: String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+        guard key.lowercased().contains("path") || trimmed.hasPrefix("/") else {
+            return nil
+        }
+        return FileManager.default.fileExists(atPath: trimmed) ? trimmed : nil
     }
 }

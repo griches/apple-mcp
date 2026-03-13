@@ -176,6 +176,38 @@ struct CommandPaletteView: View {
                 _ = await appState.openRepoFolder()
             },
             PaletteAction(
+                id: "open-repo-terminal",
+                title: "Open Repo in Terminal",
+                subtitle: "Launch Terminal at the repo root.",
+                keywords: ["terminal", "repo", "shell"]
+            ) {
+                _ = await appState.openRepoInTerminal()
+            },
+            PaletteAction(
+                id: "open-repo-iterm",
+                title: "Open Repo in iTerm",
+                subtitle: "Launch iTerm at the repo root.",
+                keywords: ["iterm", "repo", "shell"]
+            ) {
+                _ = await appState.openRepoInITerm()
+            },
+            PaletteAction(
+                id: "preview-finder-selection",
+                title: "Open Finder Selection in Preview",
+                subtitle: "Preview the first selected Finder item.",
+                keywords: ["preview", "finder", "selection", "artifact"]
+            ) {
+                _ = await appState.openFinderSelectionInPreview()
+            },
+            PaletteAction(
+                id: "photos-finder-selection",
+                title: "Open Finder Selection in Photos",
+                subtitle: "Open the first selected Finder item in Photos.",
+                keywords: ["photos", "finder", "selection", "artifact"]
+            ) {
+                _ = await appState.openFinderSelectionInPhotos()
+            },
+            PaletteAction(
                 id: "open-accessibility",
                 title: "Open Accessibility Settings",
                 subtitle: "Jump directly to the Accessibility privacy pane.",

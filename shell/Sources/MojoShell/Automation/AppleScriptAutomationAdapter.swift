@@ -11,6 +11,8 @@ protocol AppleAutomationProviding: Sendable {
     func listFinderSelection() async throws -> [String]
     func openSafariURL(_ url: String) async throws
     func currentSafariTab() async throws -> SafariTabState
+    func runTerminalCommand(_ command: String, in path: String) async throws
+    func runITermCommand(_ command: String, in path: String) async throws
 }
 
 actor AppleScriptAutomationAdapter: AppleAutomationProviding {
@@ -93,6 +95,32 @@ actor AppleScriptAutomationAdapter: AppleAutomationProviding {
             title: lines.first ?? "Unknown",
             url: lines.dropFirst().first ?? ""
         )
+    }
+
+    func runTerminalCommand(_ command: String, in path: String) async throws {
+        _ = try await scriptRunner("""
+        tell application "Terminal"
+            activate
+            if (count of windows) is 0 then
+                do script ""
+            end if
+            do script "cd " & quoted form of "\(escapeAppleScriptString(path))" & "; " & "\(escapeAppleScriptString(command))" in front window
+        end tell
+        """)
+    }
+
+    func runITermCommand(_ command: String, in path: String) async throws {
+        _ = try await scriptRunner("""
+        tell application "iTerm"
+            activate
+            if (count of windows) is 0 then
+                create window with default profile
+            end if
+            tell current session of current window
+                write text "cd " & quoted form of "\(escapeAppleScriptString(path))" & "; " & "\(escapeAppleScriptString(command))"
+            end tell
+        end tell
+        """)
     }
 
     private func escapeAppleScriptString(_ value: String) -> String {

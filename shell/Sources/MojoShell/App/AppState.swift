@@ -203,6 +203,74 @@ final class AppState: ObservableObject {
         )
     }
 
+    func openPathInPreview(_ path: String) async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.previewOpenPath.rawValue,
+                arguments: ["path": .string(path)]
+            )
+        )
+    }
+
+    func openPathInPhotos(_ path: String) async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.photosImportPath.rawValue,
+                arguments: ["path": .string(path)]
+            )
+        )
+    }
+
+    func openRepoInTerminal() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.terminalOpenRepo.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func openRepoInITerm() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.itermOpenRepo.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func runTerminalCommand(_ command: String, path: String? = nil) async -> Result<MCPToolExecutionResult, Error> {
+        var arguments: [String: AnyCodable] = ["command": .string(command)]
+        if let path, !path.isEmpty {
+            arguments["path"] = .string(path)
+        }
+        return await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.terminalRunCommand.rawValue,
+                arguments: arguments
+            )
+        )
+    }
+
+    func runITermCommand(_ command: String, path: String? = nil) async -> Result<MCPToolExecutionResult, Error> {
+        var arguments: [String: AnyCodable] = ["command": .string(command)]
+        if let path, !path.isEmpty {
+            arguments["path"] = .string(path)
+        }
+        return await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.itermRunCommand.rawValue,
+                arguments: arguments
+            )
+        )
+    }
+
     func openDownloadsFolder() async -> Result<MCPToolExecutionResult, Error> {
         await openFinderPath("~/Downloads")
     }
@@ -232,6 +300,26 @@ final class AppState: ObservableObject {
             ResolvedTool(
                 server: NativeToolExecutor.serverName,
                 tool: NativeToolName.finderListSelection.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func openFinderSelectionInPreview() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderSelectionOpenInPreview.rawValue,
+                arguments: [:]
+            )
+        )
+    }
+
+    func openFinderSelectionInPhotos() async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderSelectionOpenInPhotos.rawValue,
                 arguments: [:]
             )
         )

@@ -26,6 +26,7 @@ enum ExportTargetError: LocalizedError {
 @MainActor
 final class ProductionController: ObservableObject {
     @Published private(set) var jobs: [MediaJob] = []
+    @Published private(set) var allEvents: [JobEvent] = []
     @Published private(set) var recentEvents: [JobEvent] = []
     @Published private(set) var exportTargets: [ExportTarget] = []
     @Published var workflowLog = "Ready. Queue a workflow, then run the next job."
@@ -74,6 +75,12 @@ final class ProductionController: ObservableObject {
 
     var defaultExportTarget: ExportTarget? {
         exportTargets.first(where: \.isDefault) ?? exportTargets.first
+    }
+
+    func events(for jobID: UUID) -> [JobEvent] {
+        allEvents
+            .filter { $0.jobID == jobID }
+            .sorted { $0.timestamp > $1.timestamp }
     }
 
     func queueAssemblyJob(name: String, client: String) {
@@ -365,8 +372,10 @@ final class ProductionController: ObservableObject {
         }
 
         do {
-            recentEvents = try eventStore.loadRecent(limit: 100)
+            allEvents = try eventStore.load()
+            recentEvents = Array(allEvents.suffix(100))
         } catch {
+            allEvents = []
             recentEvents = []
             workflowLog = "Unable to load event history: \(error.localizedDescription)"
         }
@@ -414,7 +423,11 @@ final class ProductionController: ObservableObject {
 
         do {
             try eventStore.append(event)
+            allEvents.append(event)
             recentEvents.append(event)
+            if allEvents.count > 5_000 {
+                allEvents.removeFirst(allEvents.count - 5_000)
+            }
             if recentEvents.count > 100 {
                 recentEvents.removeFirst(recentEvents.count - 100)
             }
@@ -427,6 +440,9 @@ final class ProductionController: ObservableObject {
                 if let target = job.exportTargetPath {
                     metadata["export_target"] = target
                 }
+            }
+            if let screenshotPath {
+                metadata["screenshot_path"] = screenshotPath
             }
             auditRecorder(.production, "Job event", message, metadata)
         } catch {

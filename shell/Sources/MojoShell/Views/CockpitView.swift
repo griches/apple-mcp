@@ -103,7 +103,7 @@ struct CockpitView: View {
     @State private var isLoadingNowPlaying = false
     @State private var lastNowPlayingRefresh: Date?
     @State private var hasLoadedInitialPanels = false
-    @State private var operatorResult = "Finder, Safari, Shortcuts, and settings controls are ready."
+    @State private var operatorResult = "Finder, Safari, Terminal, iTerm, Preview, Photos, Shortcuts, and settings controls are ready."
     @State private var isRunningOperatorAction = false
 
     var body: some View {
@@ -259,11 +259,37 @@ struct CockpitView: View {
                             Button("Finder Selection") {
                                 Task { await runOperatorAction(appState.fetchFinderSelection) }
                             }
+                            Button("Preview Selection") {
+                                Task { await runOperatorAction(appState.openFinderSelectionInPreview) }
+                            }
+                            Button("Photos Selection") {
+                                Task { await runOperatorAction(appState.openFinderSelectionInPhotos) }
+                            }
+                        }
+                        .disabled(isRunningOperatorAction)
+
+                        HStack {
+                            Button("Terminal Repo") {
+                                Task { await runOperatorAction(appState.openRepoInTerminal) }
+                            }
+                            Button("iTerm Repo") {
+                                Task { await runOperatorAction(appState.openRepoInITerm) }
+                            }
                             Button("Safari Tab") {
                                 Task { await runOperatorAction(appState.fetchSafariCurrentTab) }
                             }
+                        }
+                        .disabled(isRunningOperatorAction)
+
+                        HStack {
                             Button("Shortcuts") {
                                 Task { await runOperatorAction(appState.listShortcuts) }
+                            }
+                            Button("Screen Recording") {
+                                Task { await runOperatorAction(appState.openScreenRecordingSettings) }
+                            }
+                            Button("Automation") {
+                                Task { await runOperatorAction(appState.openAutomationSettings) }
                             }
                         }
                         .disabled(isRunningOperatorAction)
