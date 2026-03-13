@@ -117,6 +117,39 @@ final class AppStateTests: XCTestCase {
             XCTFail("Expected native tool execution success, got \(error)")
         }
     }
+
+    func testExecuteRecordsNativeAuditEvent() async {
+        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
+        let executor = MCPToolExecutor(daemonManager: daemonManager)
+        let nativeExecutor = FakeNativeToolExecutor()
+        var recorded: [(AuditCategory, String, String, [String: String])] = []
+        let appState = AppState(
+            daemons: daemonManager,
+            executor: executor,
+            computerUseProvider: FakeComputerUseProvider(),
+            nativeExecutor: nativeExecutor,
+            auditRecorder: { category, title, detail, metadata in
+                recorded.append((category, title, detail, metadata))
+            }
+        )
+
+        let result = await appState.execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderOpenRepoRoot.rawValue,
+                arguments: [:]
+            )
+        )
+
+        switch result {
+        case .success:
+            XCTAssertEqual(recorded.last?.0, .native)
+            XCTAssertEqual(recorded.last?.1, "Tool executed")
+            XCTAssertEqual(recorded.last?.2, "\(NativeToolExecutor.serverName)/\(NativeToolName.finderOpenRepoRoot.rawValue)")
+        case .failure(let error):
+            XCTFail("Expected native tool execution success, got \(error)")
+        }
+    }
 }
 
 // MARK: - Test doubles

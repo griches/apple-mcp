@@ -76,6 +76,13 @@ final class FcpWorkflowTests: XCTestCase {
         )
     }
 
+    func testAssemblyWorkflowIncludesExportTargetInApprovalPrompt() {
+        let steps = FcpWorkflowDefinition.assemblyWorkflow(exportTargetPath: "/tmp/exports")
+
+        XCTAssertTrue(steps.dropFirst(2).first?.approvalPrompt?.contains("/tmp/exports") ?? false)
+        XCTAssertTrue(steps.dropFirst(3).first?.approvalPrompt?.contains("/tmp/exports") ?? false)
+    }
+
     func testMonitoringCheckFirstStepActivatesFCP() {
         let steps = FcpWorkflowDefinition.monitoringCheck()
         XCTAssertEqual(steps.first?.appActivationName, "Final Cut Pro")

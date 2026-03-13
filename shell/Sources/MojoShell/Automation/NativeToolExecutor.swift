@@ -48,22 +48,38 @@ actor NativeToolExecutor: NativeToolExecuting {
     static let serverName = "shell-native"
 
     private let repoRoot: String
-    private let appleScriptRunner: @Sendable (String) async throws -> String
+    private let appleAutomation: any AppleAutomationProviding
     private let commandRunner: @Sendable (String, [String], String?) async throws -> String
     private let urlOpener: @Sendable (URL) async -> Bool
 
     init(
         repoRoot: String,
-        appleScriptRunner: @escaping @Sendable (String) async throws -> String = NativeToolExecutor.defaultAppleScriptRunner,
+        appleAutomation: (any AppleAutomationProviding)? = nil,
         commandRunner: @escaping @Sendable (String, [String], String?) async throws -> String = NativeToolExecutor.defaultCommandRunner,
         urlOpener: @escaping @Sendable (URL) async -> Bool = { url in
             await MainActor.run { NSWorkspace.shared.open(url) }
         }
     ) {
         self.repoRoot = repoRoot
-        self.appleScriptRunner = appleScriptRunner
+        self.appleAutomation = appleAutomation ?? AppleScriptAutomationAdapter()
         self.commandRunner = commandRunner
         self.urlOpener = urlOpener
+    }
+
+    init(
+        repoRoot: String,
+        appleScriptRunner: @escaping @Sendable (String) async throws -> String,
+        commandRunner: @escaping @Sendable (String, [String], String?) async throws -> String = NativeToolExecutor.defaultCommandRunner,
+        urlOpener: @escaping @Sendable (URL) async -> Bool = { url in
+            await MainActor.run { NSWorkspace.shared.open(url) }
+        }
+    ) {
+        self.init(
+            repoRoot: repoRoot,
+            appleAutomation: ScriptBackedAppleAutomation(scriptRunner: appleScriptRunner),
+            commandRunner: commandRunner,
+            urlOpener: urlOpener
+        )
     }
 
     func execute(tool: String, arguments: [String: AnyCodable]) async throws -> MCPToolExecutionResult {
@@ -76,64 +92,33 @@ actor NativeToolExecutor: NativeToolExecuting {
             let path = try requiredString("path", from: arguments)
             let expanded = expandPath(path)
             try ensurePathExists(expanded)
-            _ = try await appleScriptRunner("""
-            tell application "Finder"
-                activate
-                open POSIX file "\(escapeAppleScriptString(expanded))"
-            end tell
-            """)
+            try await appleAutomation.openFinderPath(expanded)
             return result(tool: tool, text: "Opened in Finder: \(expanded)")
 
         case .finderOpenRepoRoot:
-            _ = try await appleScriptRunner("""
-            tell application "Finder"
-                activate
-                open POSIX file "\(escapeAppleScriptString(repoRoot))"
-            end tell
-            """)
+            try await appleAutomation.openFinderPath(repoRoot)
             return result(tool: tool, text: "Opened repo root in Finder: \(repoRoot)")
 
         case .finderRevealPath:
             let path = try requiredString("path", from: arguments)
             let expanded = expandPath(path)
             try ensurePathExists(expanded)
-            _ = try await appleScriptRunner("""
-            tell application "Finder"
-                activate
-                reveal POSIX file "\(escapeAppleScriptString(expanded))"
-            end tell
-            """)
+            try await appleAutomation.revealFinderPath(expanded)
             return result(tool: tool, text: "Revealed in Finder: \(expanded)")
 
         case .finderRevealBrainFile:
             let path = "\(repoRoot)/knowledge-corpus/data/mojosolo_operating_brain.json"
             try ensurePathExists(path)
-            _ = try await appleScriptRunner("""
-            tell application "Finder"
-                activate
-                reveal POSIX file "\(escapeAppleScriptString(path))"
-            end tell
-            """)
+            try await appleAutomation.revealFinderPath(path)
             return result(tool: tool, text: "Revealed brain file in Finder: \(path)")
 
         case .finderListSelection:
-            let selection = try await appleScriptRunner("""
-            tell application "Finder"
-                set selectedItems to selection
-                set outList to {}
-                repeat with anItem in selectedItems
-                    set end of outList to POSIX path of (anItem as alias)
-                end repeat
-                set AppleScript's text item delimiters to linefeed
-                set joined to outList as string
-                set AppleScript's text item delimiters to ""
-                return joined
-            end tell
-            """)
-            let trimmed = selection.trimmingCharacters(in: .whitespacesAndNewlines)
+            let selection = try await appleAutomation.listFinderSelection()
+            let trimmed = selection.joined(separator: "\n")
             return result(
                 tool: tool,
-                text: trimmed.isEmpty ? "Finder selection is empty." : trimmed
+                text: trimmed.isEmpty ? "Finder selection is empty." : trimmed,
+                payload: .array(selection.map(AnyCodable.string))
             )
 
         case .safariOpenURL:
@@ -141,38 +126,29 @@ actor NativeToolExecutor: NativeToolExecuting {
             guard let normalizedURL = normalizedURL(from: rawURL) else {
                 throw NativeToolError.invalidURL(rawURL)
             }
-            _ = try await appleScriptRunner("""
-            tell application "Safari"
-                activate
-                if (count of windows) is 0 then
-                    make new document with properties {URL:"\(escapeAppleScriptString(normalizedURL))"}
-                else
-                    set URL of current tab of front window to "\(escapeAppleScriptString(normalizedURL))"
-                end if
-            end tell
-            """)
+            try await appleAutomation.openSafariURL(normalizedURL)
             return result(tool: tool, text: "Opened in Safari: \(normalizedURL)")
 
         case .safariCurrentTab:
-            let response = try await appleScriptRunner("""
-            tell application "Safari"
-                if (count of windows) is 0 then error "Safari has no open windows."
-                set tabName to name of current tab of front window
-                set tabURL to URL of current tab of front window
-                return tabName & linefeed & tabURL
-            end tell
-            """)
-            let lines = response
-                .split(separator: "\n", omittingEmptySubsequences: false)
-                .map(String.init)
-            let title = lines.first ?? "Unknown"
-            let url = lines.dropFirst().first ?? ""
-            return result(tool: tool, text: "{\"title\":\"\(escapeJSONString(title))\",\"url\":\"\(escapeJSONString(url))\"}")
+            let tab = try await appleAutomation.currentSafariTab()
+            return result(
+                tool: tool,
+                text: "\(tab.title)\n\(tab.url)",
+                payload: .object([
+                    "title": .string(tab.title),
+                    "url": .string(tab.url),
+                ])
+            )
 
         case .shortcutsList:
             let output = try await commandRunner("/usr/bin/shortcuts", ["list"], nil)
             let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-            return result(tool: tool, text: trimmed.isEmpty ? "No shortcuts found." : trimmed)
+            let names = trimmed.isEmpty ? [] : trimmed.split(separator: "\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            return result(
+                tool: tool,
+                text: trimmed.isEmpty ? "No shortcuts found." : trimmed,
+                payload: .array(names.map(AnyCodable.string))
+            )
 
         case .shortcutsRun:
             let name = try requiredString("name", from: arguments)
@@ -185,7 +161,12 @@ actor NativeToolExecutor: NativeToolExecuting {
             let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
             return result(
                 tool: tool,
-                text: trimmed.isEmpty ? "Shortcut '\(name)' completed with no stdout." : trimmed
+                text: trimmed.isEmpty ? "Shortcut '\(name)' completed with no stdout." : trimmed,
+                payload: .object([
+                    "name": .string(name),
+                    "input_provided": .bool(input != nil),
+                    "stdout": .string(trimmed),
+                ])
             )
 
         case .systemSettingsOpen:
@@ -201,8 +182,8 @@ actor NativeToolExecutor: NativeToolExecuting {
         }
     }
 
-    private func result(tool: String, text: String) -> MCPToolExecutionResult {
-        MCPToolExecutionResult(server: Self.serverName, tool: tool, text: text)
+    private func result(tool: String, text: String, payload: AnyCodable? = nil) -> MCPToolExecutionResult {
+        MCPToolExecutionResult(server: Self.serverName, tool: tool, text: text, payload: payload)
     }
 
     private func requiredString(_ key: String, from arguments: [String: AnyCodable]) throws -> String {
@@ -264,56 +245,90 @@ actor NativeToolExecutor: NativeToolExecuting {
         return URL(string: withScheme) != nil ? withScheme : nil
     }
 
-    private func escapeAppleScriptString(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-    }
-
-    private func escapeJSONString(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-    }
-
-    private static func defaultAppleScriptRunner(script: String) async throws -> String {
-        try await defaultCommandRunner("/usr/bin/osascript", ["-e", script], nil)
-    }
-
     private static func defaultCommandRunner(_ executable: String, _ arguments: [String], _ stdin: String?) async throws -> String {
-        let process = Process()
-        let stdout = Pipe()
-        let stderr = Pipe()
-        let stdinPipe = Pipe()
+        try await ProcessCommandRunner.run(executable, arguments, stdin)
+    }
+}
 
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.standardOutput = stdout
-        process.standardError = stderr
+private actor ScriptBackedAppleAutomation: AppleAutomationProviding {
+    private let scriptRunner: @Sendable (String) async throws -> String
 
-        if stdin != nil {
-            process.standardInput = stdinPipe
-        }
+    init(scriptRunner: @escaping @Sendable (String) async throws -> String) {
+        self.scriptRunner = scriptRunner
+    }
 
-        try process.run()
+    func openFinderPath(_ path: String) async throws {
+        _ = try await scriptRunner("""
+        tell application "Finder"
+            activate
+            open POSIX file "\(escape(path))"
+        end tell
+        """)
+    }
 
-        if let stdin {
-            stdinPipe.fileHandleForWriting.write(Data(stdin.utf8))
-            try? stdinPipe.fileHandleForWriting.close()
-        }
+    func revealFinderPath(_ path: String) async throws {
+        _ = try await scriptRunner("""
+        tell application "Finder"
+            activate
+            reveal POSIX file "\(escape(path))"
+        end tell
+        """)
+    }
 
-        process.waitUntilExit()
+    func listFinderSelection() async throws -> [String] {
+        let output = try await scriptRunner("""
+        tell application "Finder"
+            set selectedItems to selection
+            set outList to {}
+            repeat with anItem in selectedItems
+                set end of outList to POSIX path of (anItem as alias)
+            end repeat
+            set AppleScript's text item delimiters to linefeed
+            set joined to outList as string
+            set AppleScript's text item delimiters to ""
+            return joined
+        end tell
+        """)
 
-        let stdoutData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderr.fileHandleForReading.readDataToEndOfFile()
+        return output
+            .split(separator: "\n")
+            .map(String.init)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 
-        if process.terminationStatus != 0 {
-            let stderrText = String(decoding: stderrData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            let message = stderrText.isEmpty ? "Command failed with status \(process.terminationStatus)." : stderrText
-            throw NativeToolError.commandFailed(message)
-        }
+    func openSafariURL(_ url: String) async throws {
+        _ = try await scriptRunner("""
+        tell application "Safari"
+            activate
+            if (count of windows) is 0 then
+                make new document with properties {URL:"\(escape(url))"}
+            else
+                set URL of current tab of front window to "\(escape(url))"
+            end if
+        end tell
+        """)
+    }
 
-        return String(decoding: stdoutData, as: UTF8.self)
+    func currentSafariTab() async throws -> SafariTabState {
+        let output = try await scriptRunner("""
+        tell application "Safari"
+            if (count of windows) is 0 then error "Safari has no open windows."
+            set tabName to name of current tab of front window
+            set tabURL to URL of current tab of front window
+            return tabName & linefeed & tabURL
+        end tell
+        """)
+
+        let lines = output
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+        return SafariTabState(title: lines.first ?? "Unknown", url: lines.dropFirst().first ?? "")
+    }
+
+    private func escape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
     }
 }

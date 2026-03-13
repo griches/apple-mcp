@@ -60,6 +60,14 @@ final class NativeToolExecutorTests: XCTestCase {
         XCTAssertEqual(invocation?.arguments, ["run", "Daily Brief", "--output-path", "-", "--input-path", "-"])
         XCTAssertEqual(invocation?.stdin, "hello world")
         XCTAssertEqual(result.text, "shortcut output")
+        XCTAssertEqual(
+            result.payload,
+            .object([
+                "name": .string("Daily Brief"),
+                "input_provided": .bool(true),
+                "stdout": .string("shortcut output"),
+            ])
+        )
     }
 
     func testSystemSettingsOpenUsesDeepLink() async throws {
@@ -82,6 +90,26 @@ final class NativeToolExecutorTests: XCTestCase {
         let opened = await capture.urls.first
         XCTAssertEqual(opened?.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         XCTAssertEqual(result.text, "Opened System Settings: accessibility")
+    }
+
+    func testShortcutsListReturnsStructuredPayload() async throws {
+        let executor = NativeToolExecutor(
+            repoRoot: "/tmp/apple-mcp",
+            appleScriptRunner: { _ in "" },
+            commandRunner: { _, _, _ in "Daily Brief\nExport Deliverable\n" },
+            urlOpener: { _ in true }
+        )
+
+        let result = try await executor.execute(
+            tool: NativeToolName.shortcutsList.rawValue,
+            arguments: [:]
+        )
+
+        XCTAssertEqual(result.text, "Daily Brief\nExport Deliverable")
+        XCTAssertEqual(
+            result.payload,
+            .array([.string("Daily Brief"), .string("Export Deliverable")])
+        )
     }
 }
 

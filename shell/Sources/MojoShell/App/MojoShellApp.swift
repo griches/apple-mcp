@@ -4,13 +4,25 @@ import SwiftUI
 @main
 struct MojoShellApp: App {
     @StateObject private var appState: AppState
+    @StateObject private var audit: AuditController
     @StateObject private var readiness: ReadinessState
     @StateObject private var production: ProductionController
 
     init() {
         let notifications = AppNotificationManager()
+        let audit = AuditController()
         let daemonManager = DaemonManager(
             onRuntimeStateChanged: { previous, current in
+                audit.record(
+                    category: .daemon,
+                    title: "Daemon state changed",
+                    detail: "\(current.serverName) -> \(current.status.rawValue)",
+                    metadata: [
+                        "previous": previous?.status.rawValue ?? "none",
+                        "error": current.lastError ?? "",
+                    ]
+                )
+
                 guard current.status == .failed, previous?.status != .failed else {
                     return
                 }
@@ -29,18 +41,25 @@ struct MojoShellApp: App {
         )
         let computerUseProvider: any ComputerUseProvider = CuaComputerUseProvider()
         let nativeExecutor: any NativeToolExecuting = NativeToolExecutor(repoRoot: daemonManager.repoRoot)
+        _audit = StateObject(wrappedValue: audit)
         _appState = StateObject(
             wrappedValue: AppState(
                 daemons: daemonManager,
                 computerUseProvider: computerUseProvider,
-                nativeExecutor: nativeExecutor
+                nativeExecutor: nativeExecutor,
+                auditRecorder: { category, title, detail, metadata in
+                    audit.record(category: category, title: title, detail: detail, metadata: metadata)
+                }
             )
         )
         _readiness = StateObject(wrappedValue: ReadinessState(daemonManager: daemonManager))
         _production = StateObject(
             wrappedValue: ProductionController(
                 computerUseProvider: computerUseProvider,
-                notifications: notifications
+                notifications: notifications,
+                auditRecorder: { category, title, detail, metadata in
+                    audit.record(category: category, title: title, detail: detail, metadata: metadata)
+                }
             )
         )
     }
@@ -49,6 +68,7 @@ struct MojoShellApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .environmentObject(audit)
                 .environmentObject(readiness)
                 .environmentObject(production)
                 .frame(minWidth: 1000, minHeight: 650)

@@ -17,6 +17,10 @@ struct MediaJob: Identifiable, Codable, Equatable, Sendable {
     let createdAt: Date
     var completedAt: Date?
     var errorMessage: String?
+    var workflowPreset: ProductionWorkflowPreset?
+    var appTarget: WorkflowAppTarget?
+    var exportTargetName: String?
+    var exportTargetPath: String?
 
     init(
         id: UUID = UUID(),
@@ -26,7 +30,11 @@ struct MediaJob: Identifiable, Codable, Equatable, Sendable {
         progress: Double,
         createdAt: Date,
         completedAt: Date?,
-        errorMessage: String?
+        errorMessage: String?,
+        workflowPreset: ProductionWorkflowPreset? = nil,
+        appTarget: WorkflowAppTarget? = nil,
+        exportTargetName: String? = nil,
+        exportTargetPath: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -36,5 +44,9 @@ struct MediaJob: Identifiable, Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.completedAt = completedAt
         self.errorMessage = errorMessage
+        self.workflowPreset = workflowPreset
+        self.appTarget = appTarget
+        self.exportTargetName = exportTargetName
+        self.exportTargetPath = exportTargetPath
     }
 }

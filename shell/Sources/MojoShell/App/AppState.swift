@@ -8,19 +8,22 @@ final class AppState: ObservableObject {
     let computerUseProvider: any ComputerUseProvider
     let nativeExecutor: any NativeToolExecuting
     private let llmProviders: [any LLMProvider]
+    private let auditRecorder: @MainActor (AuditCategory, String, String, [String: String]) -> Void
 
     init(
         daemons: DaemonManager? = nil,
         executor: MCPToolExecutor? = nil,
         computerUseProvider: (any ComputerUseProvider)? = nil,
         nativeExecutor: (any NativeToolExecuting)? = nil,
-        llmProviders: [any LLMProvider]? = nil
+        llmProviders: [any LLMProvider]? = nil,
+        auditRecorder: (@MainActor (AuditCategory, String, String, [String: String]) -> Void)? = nil
     ) {
         let resolvedDaemons = daemons ?? DaemonManager()
         self.daemons = resolvedDaemons
         self.executor = executor ?? MCPToolExecutor(daemonManager: resolvedDaemons)
         self.computerUseProvider = computerUseProvider ?? CuaComputerUseProvider()
         self.nativeExecutor = nativeExecutor ?? NativeToolExecutor(repoRoot: resolvedDaemons.repoRoot)
+        self.auditRecorder = auditRecorder ?? { _, _, _, _ in }
 
         if let llmProviders {
             self.llmProviders = llmProviders
@@ -55,10 +58,12 @@ final class AppState: ObservableObject {
         }
 
         var failures: [String] = []
+        auditRecorder(.llm, "LLM route requested", prompt, ["providers": llmProviderStackDescription])
 
         for provider in llmProviders {
             do {
                 let response = try await provider.resolve(prompt: prompt, availableTools: availableTools)
+                auditRecorder(.llm, "LLM provider response", provider.name, ["resolved_tool": response.resolvedTool?.tool ?? "none"])
                 if let tool = response.resolvedTool {
                     let execResult = await execute(tool)
                     switch execResult {
@@ -71,6 +76,7 @@ final class AppState: ObservableObject {
                 return .success(response.text)
             } catch {
                 failures.append("\(provider.name): \(error.localizedDescription)")
+                auditRecorder(.llm, "LLM provider failed", provider.name, ["error": error.localizedDescription])
             }
         }
 
@@ -78,17 +84,33 @@ final class AppState: ObservableObject {
     }
 
     func execute(_ resolvedTool: ResolvedTool) async -> Result<MCPToolExecutionResult, Error> {
+        let category: AuditCategory = resolvedTool.server == NativeToolExecutor.serverName ? .native : .mcp
+
         do {
+            let result: MCPToolExecutionResult
             if resolvedTool.server == NativeToolExecutor.serverName {
-                return .success(
-                    try await nativeExecutor.execute(
-                        tool: resolvedTool.tool,
-                        arguments: resolvedTool.arguments
-                    )
+                result = try await nativeExecutor.execute(
+                    tool: resolvedTool.tool,
+                    arguments: resolvedTool.arguments
                 )
+            } else {
+                result = try await executor.execute(resolvedTool)
             }
-            return .success(try await executor.execute(resolvedTool))
+
+            auditRecorder(
+                category,
+                "Tool executed",
+                "\(resolvedTool.server)/\(resolvedTool.tool)",
+                ["result": result.text]
+            )
+            return .success(result)
         } catch {
+            auditRecorder(
+                category,
+                "Tool failed",
+                "\(resolvedTool.server)/\(resolvedTool.tool)",
+                ["error": error.localizedDescription]
+            )
             return .failure(error)
         }
     }
@@ -136,14 +158,53 @@ final class AppState: ObservableObject {
         )
     }
 
-    func openDownloadsFolder() async -> Result<MCPToolExecutionResult, Error> {
+    func openFinderPath(_ path: String) async -> Result<MCPToolExecutionResult, Error> {
         await execute(
             ResolvedTool(
                 server: NativeToolExecutor.serverName,
                 tool: NativeToolName.finderOpenPath.rawValue,
-                arguments: ["path": .string("~/Downloads")]
+                arguments: ["path": .string(path)]
             )
         )
+    }
+
+    func revealFinderPath(_ path: String) async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.finderRevealPath.rawValue,
+                arguments: ["path": .string(path)]
+            )
+        )
+    }
+
+    func openSafariURL(_ url: String) async -> Result<MCPToolExecutionResult, Error> {
+        await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.safariOpenURL.rawValue,
+                arguments: ["url": .string(url)]
+            )
+        )
+    }
+
+    func runShortcut(named name: String, input: String? = nil) async -> Result<MCPToolExecutionResult, Error> {
+        var arguments: [String: AnyCodable] = ["name": .string(name)]
+        if let input, !input.isEmpty {
+            arguments["input"] = .string(input)
+        }
+
+        return await execute(
+            ResolvedTool(
+                server: NativeToolExecutor.serverName,
+                tool: NativeToolName.shortcutsRun.rawValue,
+                arguments: arguments
+            )
+        )
+    }
+
+    func openDownloadsFolder() async -> Result<MCPToolExecutionResult, Error> {
+        await openFinderPath("~/Downloads")
     }
 
     func openRepoFolder() async -> Result<MCPToolExecutionResult, Error> {
@@ -197,13 +258,28 @@ final class AppState: ObservableObject {
     }
 
     func openAccessibilitySettings() async -> Result<MCPToolExecutionResult, Error> {
+        await openSettingsPane("accessibility")
+    }
+
+    func openScreenRecordingSettings() async -> Result<MCPToolExecutionResult, Error> {
+        await openSettingsPane("screen_recording")
+    }
+
+    func openAutomationSettings() async -> Result<MCPToolExecutionResult, Error> {
+        await openSettingsPane("automation")
+    }
+
+    func openFullDiskAccessSettings() async -> Result<MCPToolExecutionResult, Error> {
+        await openSettingsPane("full_disk_access")
+    }
+
+    private func openSettingsPane(_ pane: String) async -> Result<MCPToolExecutionResult, Error> {
         await execute(
             ResolvedTool(
                 server: NativeToolExecutor.serverName,
                 tool: NativeToolName.systemSettingsOpen.rawValue,
-                arguments: ["pane": .string("accessibility")]
+                arguments: ["pane": .string(pane)]
             )
         )
     }
-
 }

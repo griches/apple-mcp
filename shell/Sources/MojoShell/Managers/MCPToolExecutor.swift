@@ -28,6 +28,14 @@ struct MCPToolExecutionResult: Equatable {
     let server: String
     let tool: String
     let text: String
+    let payload: AnyCodable?
+
+    init(server: String, tool: String, text: String, payload: AnyCodable? = nil) {
+        self.server = server
+        self.tool = tool
+        self.text = text
+        self.payload = payload
+    }
 }
 
 @MainActor

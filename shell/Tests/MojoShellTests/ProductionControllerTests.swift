@@ -47,7 +47,15 @@ final class ProductionControllerTests: XCTestCase {
             eventStore: eventStore,
             screenshotStore: screenshotStore,
             preflightCheck: {},
-            stepsProvider: { [WorkflowStep.keypress("Test Step", key: "cmd+e", delay: 0)] }
+            workflowPlanProvider: { job in
+                WorkflowPlan(
+                    preset: job.workflowPreset ?? .fcpExportCurrentTimeline,
+                    steps: [WorkflowStep.keypress("Test Step", key: "cmd+e", delay: 0)],
+                    requiresExportPreflight: false,
+                    completionMessage: "Test workflow complete.",
+                    placeholderMessage: nil
+                )
+            }
         )
 
         controller.queueAssemblyJob(name: "Run Job", client: "QA")
@@ -140,6 +148,61 @@ final class ProductionControllerTests: XCTestCase {
         XCTAssertTrue(events.contains(where: { $0.message == "Job requeued for retry" }))
     }
 
+    func testQueueWorkflowJobStoresPresetAndExportTarget() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let exportTargetStore = ExportTargetStore(fileURL: root.appendingPathComponent("export-targets.json"))
+        let jobStore = JobStore(fileURL: root.appendingPathComponent("jobs.json"))
+        let eventStore = JobEventStore(fileURL: root.appendingPathComponent("events.json"))
+        let screenshotStore = ScreenshotStore(directoryURL: root.appendingPathComponent("screens"))
+        let targetPath = root.appendingPathComponent("exports").path
+        try exportTargetStore.save([
+            ExportTarget(name: "Exports", path: targetPath, isDefault: true),
+        ])
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: jobStore,
+            eventStore: eventStore,
+            screenshotStore: screenshotStore,
+            exportTargetStore: exportTargetStore,
+            preflightCheck: {},
+            stepsProvider: { [] }
+        )
+
+        controller.queueWorkflowJob(client: "QA", preset: .fcpExportCurrentTimeline)
+
+        XCTAssertEqual(controller.jobs.last?.workflowPreset, .fcpExportCurrentTimeline)
+        XCTAssertEqual(controller.jobs.last?.exportTargetPath, targetPath)
+        XCTAssertEqual(controller.jobs.last?.appTarget, .finalCutPro)
+    }
+
+    func testMotionPlaceholderCompletesWithoutStartingComputerUseSession() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let provider = ControllerTestComputerUseProvider()
+        let controller = ProductionController(
+            computerUseProvider: provider,
+            jobStore: JobStore(fileURL: root.appendingPathComponent("jobs.json")),
+            eventStore: JobEventStore(fileURL: root.appendingPathComponent("events.json")),
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens"))
+        )
+
+        controller.queueWorkflowJob(client: "QA", preset: .motionPlaceholderReview)
+        await controller.runNextWorkflow()
+
+        let startedSessionCount = await provider.startedSessionCount()
+        XCTAssertEqual(controller.jobs.first?.status, .completed)
+        XCTAssertEqual(startedSessionCount, 0)
+        XCTAssertTrue(controller.workflowLog.contains("placeholder"))
+    }
+
     func testRunWorkflowWaitsForApprovalAndCompletesWhenApproved() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
@@ -158,15 +221,21 @@ final class ProductionControllerTests: XCTestCase {
             eventStore: eventStore,
             screenshotStore: screenshotStore,
             preflightCheck: {},
-            stepsProvider: {
-                [
-                    WorkflowStep.keypress(
-                        "Approve Export",
-                        key: "cmd+e",
-                        approvalPrompt: "Confirm export settings",
-                        delay: 0
-                    ),
-                ]
+            workflowPlanProvider: { job in
+                WorkflowPlan(
+                    preset: job.workflowPreset ?? .fcpExportCurrentTimeline,
+                    steps: [
+                        WorkflowStep.keypress(
+                            "Approve Export",
+                            key: "cmd+e",
+                            approvalPrompt: "Confirm export settings",
+                            delay: 0
+                        ),
+                    ],
+                    requiresExportPreflight: false,
+                    completionMessage: "Approval workflow complete.",
+                    placeholderMessage: nil
+                )
             }
         )
 
@@ -210,15 +279,21 @@ final class ProductionControllerTests: XCTestCase {
             eventStore: eventStore,
             screenshotStore: screenshotStore,
             preflightCheck: {},
-            stepsProvider: {
-                [
-                    WorkflowStep.keypress(
-                        "Approve Export",
-                        key: "cmd+e",
-                        approvalPrompt: "Confirm export settings",
-                        delay: 0
-                    ),
-                ]
+            workflowPlanProvider: { job in
+                WorkflowPlan(
+                    preset: job.workflowPreset ?? .fcpExportCurrentTimeline,
+                    steps: [
+                        WorkflowStep.keypress(
+                            "Approve Export",
+                            key: "cmd+e",
+                            approvalPrompt: "Confirm export settings",
+                            delay: 0
+                        ),
+                    ],
+                    requiresExportPreflight: false,
+                    completionMessage: "Approval workflow complete.",
+                    placeholderMessage: nil
+                )
             }
         )
 
@@ -286,6 +361,7 @@ private actor ControllerTestComputerUseProvider: ComputerUseProvider {
     let name = "controller-test-provider"
     private var sessions: Set<String> = []
     private let screenshotAfter: Data?
+    private var startCount = 0
 
     init(screenshotAfter: Data? = nil) {
         self.screenshotAfter = screenshotAfter
@@ -293,6 +369,7 @@ private actor ControllerTestComputerUseProvider: ComputerUseProvider {
 
     func startSession() async throws -> String {
         let id = UUID().uuidString
+        startCount += 1
         sessions.insert(id)
         return id
     }
@@ -309,6 +386,10 @@ private actor ControllerTestComputerUseProvider: ComputerUseProvider {
 
     func stopSession(sessionId: String) async throws {
         sessions.remove(sessionId)
+    }
+
+    func startedSessionCount() -> Int {
+        startCount
     }
 }
 

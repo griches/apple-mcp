@@ -149,8 +149,19 @@ enum FcpWorkflowDefinition {
     /// - Parameter shareDestination: The share-sheet destination button title to select.
     ///   Defaults to `"Export File (default)…"` — the File > Share item name (context-sensitive).
     ///   Other destinations: `"Apple Devices 1080p…"`, `"Social Platforms…"`, etc.
-    static func assemblyWorkflow(shareDestination: String = "Export File (default)…") -> [WorkflowStep] {
-        [
+    static func assemblyWorkflow(
+        shareDestination: String = "Export File (default)…",
+        exportTargetPath: String? = nil
+    ) -> [WorkflowStep] {
+        let destinationPrompt = exportTargetPath.map {
+            "Confirm the export destination in Final Cut Pro before MojoShell clicks it. Target folder: \($0)"
+        } ?? "Confirm the export destination in Final Cut Pro before MojoShell clicks it."
+
+        let nextPrompt = exportTargetPath.map {
+            "Confirm the export sheet is configured correctly before advancing. Save into: \($0)"
+        } ?? "Confirm the export sheet is configured correctly before advancing."
+
+        return [
             // 1. Bring FCP to front deterministically (NSWorkspace, not cmd+tab)
             .activateApp("Final Cut Pro"),
 
@@ -173,7 +184,7 @@ enum FcpWorkflowDefinition {
                 "Select '\(shareDestination)'",
                 app: "Final Cut Pro",
                 buttonTitled: shareDestination,
-                approvalPrompt: "Confirm the export destination in Final Cut Pro before MojoShell clicks it.",
+                approvalPrompt: destinationPrompt,
                 delay: 0.5
             ),
 
@@ -185,7 +196,7 @@ enum FcpWorkflowDefinition {
                 app: "Final Cut Pro",
                 buttonTitled: "Next…",
                 fallback: nil,
-                approvalPrompt: "Confirm the export sheet is configured correctly before advancing.",
+                approvalPrompt: nextPrompt,
                 delay: 0.5
             ),
         ]

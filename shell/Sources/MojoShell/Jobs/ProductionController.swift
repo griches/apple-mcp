@@ -9,11 +9,26 @@ struct WorkflowApprovalRequest: Identifiable, Equatable, Sendable {
     let createdAt: Date
 }
 
+enum ExportTargetError: LocalizedError {
+    case emptyName
+    case emptyPath
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyName:
+            return "Export target name cannot be empty."
+        case .emptyPath:
+            return "Export target path cannot be empty."
+        }
+    }
+}
+
 @MainActor
 final class ProductionController: ObservableObject {
     @Published private(set) var jobs: [MediaJob] = []
     @Published private(set) var recentEvents: [JobEvent] = []
-    @Published var workflowLog = "Ready. Queue a job, then run the assembly workflow."
+    @Published private(set) var exportTargets: [ExportTarget] = []
+    @Published var workflowLog = "Ready. Queue a workflow, then run the next job."
     @Published var isRunningWorkflow = false
     @Published private(set) var pendingApproval: WorkflowApprovalRequest?
 
@@ -22,8 +37,10 @@ final class ProductionController: ObservableObject {
     private let jobStore: JobStore
     private let eventStore: JobEventStore
     private let screenshotStore: ScreenshotStore
+    private let exportTargetStore: ExportTargetStore
     private let preflightCheck: @MainActor () throws -> Void
-    private let stepsProvider: () -> [WorkflowStep]
+    private let workflowPlanProvider: @MainActor (MediaJob) throws -> WorkflowPlan
+    private let auditRecorder: @MainActor (AuditCategory, String, String, [String: String]) -> Void
     private let now: () -> Date
     private var approvalContinuation: CheckedContinuation<Bool, Never>?
 
@@ -33,8 +50,11 @@ final class ProductionController: ObservableObject {
         jobStore: JobStore = JobStore(),
         eventStore: JobEventStore = JobEventStore(),
         screenshotStore: ScreenshotStore = ScreenshotStore(),
+        exportTargetStore: ExportTargetStore = ExportTargetStore(),
         preflightCheck: @escaping @MainActor () throws -> Void = ProductionController.defaultPreflightCheck,
         stepsProvider: @escaping () -> [WorkflowStep] = { FcpWorkflowDefinition.assemblyWorkflow() },
+        workflowPlanProvider: (@MainActor (MediaJob) throws -> WorkflowPlan)? = nil,
+        auditRecorder: (@MainActor (AuditCategory, String, String, [String: String]) -> Void)? = nil,
         now: @escaping () -> Date = Date.init
     ) {
         self.computerUseProvider = computerUseProvider
@@ -42,25 +62,57 @@ final class ProductionController: ObservableObject {
         self.jobStore = jobStore
         self.eventStore = eventStore
         self.screenshotStore = screenshotStore
+        self.exportTargetStore = exportTargetStore
         self.preflightCheck = preflightCheck
-        self.stepsProvider = stepsProvider
+        self.workflowPlanProvider = workflowPlanProvider ?? { job in
+            try ProductionController.defaultWorkflowPlan(for: job, stepsProvider: stepsProvider)
+        }
+        self.auditRecorder = auditRecorder ?? { _, _, _, _ in }
         self.now = now
         loadFromDisk()
     }
 
+    var defaultExportTarget: ExportTarget? {
+        exportTargets.first(where: \.isDefault) ?? exportTargets.first
+    }
+
     func queueAssemblyJob(name: String, client: String) {
-        let job = MediaJob(
+        queueWorkflowJob(
             name: name,
+            client: client,
+            preset: .fcpExportCurrentTimeline,
+            exportTargetID: defaultExportTarget?.id
+        )
+    }
+
+    func queueWorkflowJob(
+        name: String? = nil,
+        client: String,
+        preset: ProductionWorkflowPreset,
+        exportTargetID: UUID? = nil
+    ) {
+        let exportTarget = resolvedExportTarget(for: preset, requestedID: exportTargetID)
+        let jobName = name ?? defaultJobName(for: preset)
+        let job = MediaJob(
+            name: jobName,
             client: client,
             status: .queued,
             progress: 0.0,
             createdAt: now(),
             completedAt: nil,
-            errorMessage: nil
+            errorMessage: nil,
+            workflowPreset: preset,
+            appTarget: preset.appTarget,
+            exportTargetName: exportTarget?.name,
+            exportTargetPath: exportTarget?.path
         )
+
         jobs.append(job)
         persistJobs()
-        recordEvent(jobID: job.id, type: .queued, message: "Job queued: \(name)", progress: 0.0)
+        recordEvent(jobID: job.id, type: .queued, message: "Job queued: \(jobName)", progress: 0.0)
+        if let exportTarget {
+            recordEvent(jobID: job.id, type: .info, message: "Export target: \(exportTarget.name) -> \(exportTarget.path)")
+        }
     }
 
     func retryFailedJob(id: UUID) {
@@ -74,6 +126,46 @@ final class ProductionController: ObservableObject {
         jobs[index].errorMessage = nil
         persistJobs()
         recordEvent(jobID: id, type: .queued, message: "Job requeued for retry", progress: 0.0)
+    }
+
+    func addExportTarget(name: String, path: String) throws {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPath = (path as NSString).expandingTildeInPath.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            throw ExportTargetError.emptyName
+        }
+        guard !trimmedPath.isEmpty else {
+            throw ExportTargetError.emptyPath
+        }
+
+        var isDirectory: ObjCBool = false
+        if !FileManager.default.fileExists(atPath: trimmedPath, isDirectory: &isDirectory) {
+            try FileManager.default.createDirectory(atPath: trimmedPath, withIntermediateDirectories: true, attributes: nil)
+            isDirectory = true
+        }
+
+        let target = ExportTarget(
+            name: trimmedName,
+            path: trimmedPath,
+            isDefault: exportTargets.isEmpty
+        )
+        exportTargets.append(target)
+        persistExportTargets()
+        auditRecorder(.production, "Export target added", trimmedName, ["path": trimmedPath])
+    }
+
+    func setDefaultExportTarget(id: UUID) {
+        guard exportTargets.contains(where: { $0.id == id }) else {
+            return
+        }
+        for index in exportTargets.indices {
+            exportTargets[index].isDefault = exportTargets[index].id == id
+        }
+        persistExportTargets()
+        if let target = exportTargets.first(where: { $0.id == id }) {
+            auditRecorder(.production, "Default export target set", target.name, ["path": target.path])
+        }
     }
 
     func approvePendingStep() {
@@ -97,6 +189,10 @@ final class ProductionController: ObservableObject {
     }
 
     func runNextAssemblyWorkflow() async {
+        await runNextWorkflow()
+    }
+
+    func runNextWorkflow() async {
         guard !isRunningWorkflow else {
             return
         }
@@ -109,32 +205,64 @@ final class ProductionController: ObservableObject {
         isRunningWorkflow = true
         defer { isRunningWorkflow = false }
 
-        let jobID = jobs[queuedIndex].id
-        workflowLog = "Checking Final Cut Pro export state..."
+        let job = jobs[queuedIndex]
+        let jobID = job.id
+        let preset = job.workflowPreset ?? .fcpExportCurrentTimeline
+        let plan: WorkflowPlan
 
         do {
-            try preflightCheck()
+            plan = try workflowPlanProvider(job)
         } catch {
-            let message = humanReadablePreflightError(error)
+            let message = "Workflow plan error: \(error.localizedDescription)"
             failJob(id: jobID, message: message)
             workflowLog = message
             await notifications.deliver(title: "MojoShell Job Failed", body: jobTitle(for: jobID))
             return
         }
 
-        updateJob(id: jobID, status: .running, progress: 0.1, completedAt: nil, errorMessage: nil)
-        workflowLog = "Starting assembly workflow..."
-        recordEvent(jobID: jobID, type: .started, message: "Assembly workflow started", progress: 0.1)
+        workflowLog = "Preparing \(preset.title)..."
+        if let exportTargetPath = job.exportTargetPath {
+            recordEvent(jobID: jobID, type: .info, message: "Using export target path: \(exportTargetPath)")
+        }
+
+        if plan.requiresExportPreflight {
+            do {
+                try preflightCheck()
+            } catch {
+                let message = humanReadablePreflightError(error)
+                failJob(id: jobID, message: message)
+                workflowLog = message
+                await notifications.deliver(title: "MojoShell Job Failed", body: jobTitle(for: jobID))
+                return
+            }
+        }
+
+        updateJob(id: jobID, status: .running, progress: plan.steps.isEmpty ? 0.9 : 0.1, completedAt: nil, errorMessage: nil)
+        workflowLog = "Starting \(preset.title)..."
+        recordEvent(jobID: jobID, type: .started, message: "\(preset.title) started", progress: plan.steps.isEmpty ? 0.9 : 0.1)
+
+        if let placeholderMessage = plan.placeholderMessage {
+            workflowLog = placeholderMessage
+            recordEvent(jobID: jobID, type: .info, message: placeholderMessage)
+            completeJob(id: jobID, message: plan.completionMessage)
+            await notifications.deliver(title: "MojoShell Job Complete", body: jobTitle(for: jobID))
+            return
+        }
+
+        if plan.steps.isEmpty {
+            completeJob(id: jobID, message: plan.completionMessage)
+            await notifications.deliver(title: "MojoShell Job Complete", body: jobTitle(for: jobID))
+            return
+        }
 
         var sessionId: String?
         do {
             sessionId = try await computerUseProvider.startSession()
-            let steps = stepsProvider()
-            let stepCount = max(steps.count, 1)
+            let stepCount = max(plan.steps.count, 1)
             let executor = WorkflowExecutor(provider: computerUseProvider)
 
             try await executor.run(
-                steps: steps,
+                steps: plan.steps,
                 sessionId: sessionId!,
                 onProgress: { [weak self] message in
                     Task { @MainActor [weak self] in
@@ -155,7 +283,6 @@ final class ProductionController: ObservableObject {
                                 jobID: jobID,
                                 type: .info,
                                 message: "Step \(stepIndex + 1): \(result.message)",
-                                progress: nil,
                                 screenshotPath: url.path
                             )
                         } catch {
@@ -173,9 +300,7 @@ final class ProductionController: ObservableObject {
                 try await computerUseProvider.stopSession(sessionId: sessionId)
             }
 
-            updateJob(id: jobID, status: .completed, progress: 1.0, completedAt: now(), errorMessage: nil)
-            workflowLog = "Assembly workflow complete."
-            recordEvent(jobID: jobID, type: .completed, message: "Assembly workflow complete", progress: 1.0)
+            completeJob(id: jobID, message: plan.completionMessage)
             await notifications.deliver(title: "MojoShell Job Complete", body: jobTitle(for: jobID))
         } catch {
             if let sessionId {
@@ -196,6 +321,12 @@ final class ProductionController: ObservableObject {
                 await notifications.deliver(title: "MojoShell Job Failed", body: jobTitle(for: jobID))
             }
         }
+    }
+
+    private func completeJob(id: UUID, message: String) {
+        updateJob(id: id, status: .completed, progress: 1.0, completedAt: now(), errorMessage: nil)
+        workflowLog = message
+        recordEvent(jobID: id, type: .completed, message: message, progress: 1.0)
     }
 
     private func failJob(id: UUID, message: String) {
@@ -239,6 +370,14 @@ final class ProductionController: ObservableObject {
             recentEvents = []
             workflowLog = "Unable to load event history: \(error.localizedDescription)"
         }
+
+        do {
+            exportTargets = try exportTargetStore.load()
+            persistExportTargets()
+        } catch {
+            exportTargets = []
+            workflowLog = "Unable to load export targets: \(error.localizedDescription)"
+        }
     }
 
     private func persistJobs() {
@@ -246,6 +385,14 @@ final class ProductionController: ObservableObject {
             try jobStore.save(jobs)
         } catch {
             workflowLog = "Job persistence failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func persistExportTargets() {
+        do {
+            try exportTargetStore.save(exportTargets)
+        } catch {
+            workflowLog = "Export target persistence failed: \(error.localizedDescription)"
         }
     }
 
@@ -271,8 +418,82 @@ final class ProductionController: ObservableObject {
             if recentEvents.count > 100 {
                 recentEvents.removeFirst(recentEvents.count - 100)
             }
+
+            var metadata = ["job_id": jobID.uuidString, "event_type": type.rawValue]
+            if let job = jobs.first(where: { $0.id == jobID }) {
+                if let preset = job.workflowPreset?.title {
+                    metadata["preset"] = preset
+                }
+                if let target = job.exportTargetPath {
+                    metadata["export_target"] = target
+                }
+            }
+            auditRecorder(.production, "Job event", message, metadata)
         } catch {
             workflowLog = "Event persistence failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func resolvedExportTarget(for preset: ProductionWorkflowPreset, requestedID: UUID?) -> ExportTarget? {
+        if let requestedID, let target = exportTargets.first(where: { $0.id == requestedID }) {
+            return target
+        }
+        if preset.requiresExportTarget {
+            return defaultExportTarget
+        }
+        return nil
+    }
+
+    private func defaultJobName(for preset: ProductionWorkflowPreset) -> String {
+        let stamp = now().formatted(date: .abbreviated, time: .shortened)
+        return "\(preset.title) - \(stamp)"
+    }
+
+    private static func defaultWorkflowPlan(
+        for job: MediaJob,
+        stepsProvider: @escaping () -> [WorkflowStep]
+    ) throws -> WorkflowPlan {
+        let preset = job.workflowPreset ?? .fcpExportCurrentTimeline
+
+        switch preset {
+        case .fcpExportCurrentTimeline:
+            return WorkflowPlan(
+                preset: preset,
+                steps: job.exportTargetPath == nil
+                    ? stepsProvider()
+                    : FcpWorkflowDefinition.assemblyWorkflow(exportTargetPath: job.exportTargetPath),
+                requiresExportPreflight: true,
+                completionMessage: "FCP export workflow complete.",
+                placeholderMessage: nil
+            )
+
+        case .fcpMonitorBackgroundTasks:
+            return WorkflowPlan(
+                preset: preset,
+                steps: FcpWorkflowDefinition.monitoringCheck(),
+                requiresExportPreflight: false,
+                completionMessage: "FCP background task monitor opened.",
+                placeholderMessage: nil
+            )
+
+        case .motionPlaceholderReview:
+            return WorkflowPlan(
+                preset: preset,
+                steps: [],
+                requiresExportPreflight: false,
+                completionMessage: "Motion placeholder review logged.",
+                placeholderMessage: "Motion review workflow placeholder recorded. Real Motion automation is not implemented yet."
+            )
+
+        case .motionPlaceholderExport:
+            let target = job.exportTargetPath.map { " Planned target: \($0)" } ?? ""
+            return WorkflowPlan(
+                preset: preset,
+                steps: [],
+                requiresExportPreflight: false,
+                completionMessage: "Motion placeholder export logged.",
+                placeholderMessage: "Motion export workflow placeholder recorded.\(target)"
+            )
         }
     }
 
@@ -325,7 +546,7 @@ final class ProductionController: ObservableObject {
     private func humanReadablePreflightError(_ error: Error) -> String {
         if let finderError = error as? AccessibilityElementFinder.FinderError {
             switch finderError {
-            case .appNotRunning(_):
+            case .appNotRunning:
                 return "Final Cut Pro is not running. Open it and load a project first."
             case .accessibilityPermissionDenied:
                 return "Accessibility permission denied. Grant access in System Settings -> Privacy & Security -> Accessibility."
