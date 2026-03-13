@@ -128,9 +128,10 @@ enum FcpWorkflowDefinition {
     ///              It does NOT appear in the AX tree unless FCP has an exportable project/clip
     ///              selected. Without that state, only "Export XML…" and "Export Captions…"
     ///              are visible. File > Share > "Export File (default)…" is the target entry.
-    ///   ❌ Steps 3-4 — "Next" / "Save" inside the export sheet: TBD.
-    ///              Requires: project open → timeline selection → Share → Export File → sheet open.
-    ///              Then run: scripts/discover_ax_elements.py --app "Final Cut Pro" --title next
+    ///   ✅ Step 3-4 — export sheet buttons confirmed live (2026-03-12):
+    ///              Advance: "Next…" (AXButton, ellipsis included) at approx 994,715
+    ///              Cancel:  "Cancel" (AXButton) at approx 916,715
+    ///              Note: "Save Effects Preset" is a separate inspector button, not the sheet advance.
     ///
     /// - Parameter shareDestination: The share-sheet destination button title to select.
     ///   Defaults to `"Export File (default)…"` — the File > Share item name (context-sensitive).
@@ -163,13 +164,12 @@ enum FcpWorkflowDefinition {
             ),
 
             // 4. Advance through the export sheet.
-            //    Title TBD — verify with sheet open:
-            //      scripts/discover_ax_elements.py --app "Final Cut Pro" --title next --max-depth 10
-            //      scripts/discover_ax_elements.py --app "Final Cut Pro" --title save --max-depth 10
+            //    Verified AX title: "Next…" (with ellipsis) — confirmed live 2026-03-12.
+            //    "Save Effects Preset" is a separate inspector button; the sheet advance is "Next…".
             .click(
-                "Click Next / Save",
+                "Click Next…",
                 app: "Final Cut Pro",
-                buttonTitled: "Next",
+                buttonTitled: "Next…",
                 fallback: nil,
                 delay: 0.5
             ),

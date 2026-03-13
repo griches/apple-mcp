@@ -60,6 +60,11 @@ final class FcpWorkflowTests: XCTestCase {
             steps.dropFirst(2).first?.axQuery?.titleContaining,
             "Export File (default)…"
         )
+        // Step 4: advance button confirmed live — "Next…" (with ellipsis)
+        XCTAssertEqual(
+            steps.dropFirst(3).first?.axQuery?.titleContaining,
+            "Next…"
+        )
     }
 
     func testMonitoringCheckFirstStepActivatesFCP() {
