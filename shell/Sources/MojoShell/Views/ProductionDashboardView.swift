@@ -125,6 +125,35 @@ struct ProductionDashboardView: View {
         }
 
         isRunningWorkflow = true
+
+        // Preflight: verify FCP is running and has an exportable selection before starting a session.
+        // "Export File (default)…" only appears in the AX tree when a project/clip is selected.
+        workflowLog = "Checking Final Cut Pro export state…"
+        do {
+            let exportItems = try AccessibilityElementFinder.findElements(
+                inApp: "Final Cut Pro",
+                roles: ["AXMenuItem"],
+                titleContaining: "Export File"
+            )
+            guard !exportItems.isEmpty else {
+                workflowLog = "No exportable clip selected in Final Cut Pro. Select a timeline item and try again."
+                isRunningWorkflow = false
+                return
+            }
+        } catch AccessibilityElementFinder.FinderError.appNotRunning {
+            workflowLog = "Final Cut Pro is not running. Open it and load a project first."
+            isRunningWorkflow = false
+            return
+        } catch AccessibilityElementFinder.FinderError.accessibilityPermissionDenied {
+            workflowLog = "Accessibility permission denied. Grant access in System Settings → Privacy & Security → Accessibility."
+            isRunningWorkflow = false
+            return
+        } catch {
+            workflowLog = "Preflight error: \(error.localizedDescription)"
+            isRunningWorkflow = false
+            return
+        }
+
         jobs[queuedIndex].status = .running
         jobs[queuedIndex].progress = 0.15
         workflowLog = "Starting assembly workflow…"

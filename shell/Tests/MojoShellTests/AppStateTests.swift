@@ -3,71 +3,31 @@ import XCTest
 
 @MainActor
 final class AppStateTests: XCTestCase {
-    func testRunAssemblyWorkflowIncludesJobNameAndProviderState() async {
+
+    func testDefaultProviderNameIsSetFromInjectedProvider() {
         let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
         let executor = MCPToolExecutor(daemonManager: daemonManager)
-        let provider = FakeComputerUseProvider()
         let appState = AppState(
             daemons: daemonManager,
             executor: executor,
-            computerUseProvider: provider,
-            assemblyClickTarget: "640,400"
+            computerUseProvider: FakeComputerUseProvider()
         )
-
-        let result = await appState.runAssemblyWorkflow(jobName: "Demo Job")
-
-        switch result {
-        case .success(let output):
-            XCTAssertTrue(output.contains("Demo Job"))
-            XCTAssertTrue(output.contains("fake-cu"))
-            XCTAssertTrue(output.contains("640,400"))
-            XCTAssertTrue(output.contains("executed"))
-        case .failure(let error):
-            XCTFail("Expected success, got \(error)")
-        }
+        XCTAssertEqual(appState.computerUseProviderName, "fake-cu")
     }
 
-    func testRunAssemblyWorkflowFailsWhenClickTargetIsMissing() async {
+    func testLLMStackDescriptionReflectsInjectedProviders() {
         let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
         let executor = MCPToolExecutor(daemonManager: daemonManager)
         let appState = AppState(
             daemons: daemonManager,
             executor: executor,
             computerUseProvider: FakeComputerUseProvider(),
-            assemblyClickTarget: nil
+            llmProviders: [
+                FakeLLMProvider(name: "claude", response: LLMResponse(text: "", resolvedTool: nil)),
+                FakeLLMProvider(name: "openai", response: LLMResponse(text: "", resolvedTool: nil)),
+            ]
         )
-
-        let result = await appState.runAssemblyWorkflow(jobName: "Demo Job")
-
-        switch result {
-        case .success(let output):
-            XCTFail("Expected missing target failure, got \(output)")
-        case .failure(let error as AssemblyWorkflowError):
-            XCTAssertEqual(error, .missingClickTarget)
-        case .failure(let error):
-            XCTFail("Unexpected error: \(error)")
-        }
-    }
-
-    func testRunAssemblyWorkflowStopsSessionAfterFailure() async {
-        let daemonManager = DaemonManager(repoRoot: "/tmp/apple-mcp")
-        let executor = MCPToolExecutor(daemonManager: daemonManager)
-        let provider = RecordingFailingComputerUseProvider()
-        let appState = AppState(
-            daemons: daemonManager,
-            executor: executor,
-            computerUseProvider: provider,
-            assemblyClickTarget: "640,400"
-        )
-
-        let result = await appState.runAssemblyWorkflow(jobName: "Demo Job")
-
-        switch result {
-        case .success(let output):
-            XCTFail("Expected failure, got \(output)")
-        case .failure:
-            XCTAssertTrue(await provider.didStopSession)
-        }
+        XCTAssertEqual(appState.llmProviderStackDescription, "claude -> openai")
     }
 
     func testResolveWithLLMFallsBackToSecondProvider() async {
@@ -95,12 +55,12 @@ final class AppStateTests: XCTestCase {
     }
 }
 
+// MARK: - Test doubles
+
 actor FakeComputerUseProvider: ComputerUseProvider {
     let name = "fake-cu"
 
-    func startSession() async throws -> String {
-        "fake-session"
-    }
+    func startSession() async throws -> String { "fake-session" }
 
     func captureState(sessionId _: String) async throws -> ComputerUseState {
         ComputerUseState(appName: "fake-cu", screenshotData: nil, timestamp: Date())
@@ -111,28 +71,6 @@ actor FakeComputerUseProvider: ComputerUseProvider {
     }
 
     func stopSession(sessionId _: String) async throws {}
-}
-
-actor RecordingFailingComputerUseProvider: ComputerUseProvider {
-    let name = "recording-cu"
-
-    private(set) var didStopSession = false
-
-    func startSession() async throws -> String {
-        "recording-session"
-    }
-
-    func captureState(sessionId _: String) async throws -> ComputerUseState {
-        ComputerUseState(appName: "recording-cu", screenshotData: nil, timestamp: Date())
-    }
-
-    func execute(sessionId _: String, action _: ComputerUseAction) async throws -> ComputerUseResult {
-        throw TestComputerUseError.executionFailed
-    }
-
-    func stopSession(sessionId _: String) async throws {
-        didStopSession = true
-    }
 }
 
 struct FailingLLMProvider: LLMProvider {
@@ -165,19 +103,7 @@ enum TestLLMError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .failed(let name):
-            return "\(name) failed"
-        }
-    }
-}
-
-enum TestComputerUseError: LocalizedError {
-    case executionFailed
-
-    var errorDescription: String? {
-        switch self {
-        case .executionFailed:
-            return "execution failed"
+        case .failed(let name): return "\(name) failed"
         }
     }
 }
