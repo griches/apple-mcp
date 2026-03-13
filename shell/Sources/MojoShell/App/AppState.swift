@@ -305,6 +305,16 @@ final class AppState: ObservableObject {
         )
     }
 
+    func fetchFinderSelectionPaths() async -> Result<[String], Error> {
+        let result = await fetchFinderSelection()
+        switch result {
+        case .success(let output):
+            return .success(parseFinderSelectionPaths(from: output))
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
     func openFinderSelectionInPreview() async -> Result<MCPToolExecutionResult, Error> {
         await execute(
             ResolvedTool(
@@ -369,5 +379,23 @@ final class AppState: ObservableObject {
                 arguments: ["pane": .string(pane)]
             )
         )
+    }
+
+    private func parseFinderSelectionPaths(from output: MCPToolExecutionResult) -> [String] {
+        if case .array(let values)? = output.payload {
+            return values.compactMap { value in
+                guard case .string(let path) = value else {
+                    return nil
+                }
+                return path.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .filter { !$0.isEmpty }
+        }
+
+        return output.text
+            .split(separator: "\n")
+            .map(String.init)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "Finder selection is empty." }
     }
 }

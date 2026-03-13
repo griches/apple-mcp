@@ -15,6 +15,7 @@ struct CommandPaletteView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var audit: AuditController
     @EnvironmentObject private var production: ProductionController
+    @EnvironmentObject private var session: ShellSessionController
 
     @State private var query = ""
 
@@ -79,6 +80,15 @@ struct CommandPaletteView: View {
             ) {
                 selectedView = .terminal
                 audit.record(category: .navigation, title: "Open view", detail: ShellView.terminal.rawValue)
+            },
+            PaletteAction(
+                id: "clear-terminal-history",
+                title: "Clear Terminal History",
+                subtitle: "Reset the persisted Agent Terminal transcript.",
+                keywords: ["terminal", "history", "clear", "reset"]
+            ) {
+                session.clearTerminalHistory()
+                selectedView = .terminal
             },
             PaletteAction(
                 id: "nav-production",

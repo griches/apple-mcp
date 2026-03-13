@@ -1,20 +1,26 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ProductionDashboardView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var readiness: ReadinessState
     @EnvironmentObject private var production: ProductionController
+    @EnvironmentObject private var session: ShellSessionController
 
     @State private var discoveredElements: [FoundAXElement] = []
     @State private var isDiscovering = false
     @State private var selectedPreset: ProductionWorkflowPreset = .fcpExportCurrentTimeline
     @State private var selectedExportTargetID: UUID?
+    @State private var selectedApprovalMode: WorkflowApprovalMode = .smart
     @State private var newExportTargetName = ""
     @State private var newExportTargetPath = ""
     @State private var exportTargetStatus = ""
     @State private var selectedJobID: UUID?
     @State private var selectedArtifactPath: String?
+    @State private var queuedSourceAssets: [SourceAsset] = []
+    @State private var workflowNotes = ""
+    @State private var isImportingSourceAssets = false
 
     var body: some View {
         HSplitView {
@@ -39,6 +45,16 @@ struct ProductionDashboardView: View {
                         }
                         .disabled(!selectedPreset.requiresExportTarget && production.exportTargets.isEmpty)
 
+                        Picker("Approval Policy", selection: $selectedApprovalMode) {
+                            ForEach(WorkflowApprovalMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+
+                        Text(selectedApprovalMode.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
                         HStack {
                             Button("Queue Workflow") {
                                 queueSelectedWorkflow()
@@ -53,6 +69,69 @@ struct ProductionDashboardView: View {
                                 Task { await openSelectedExportTarget() }
                             }
                             .disabled(activeExportTarget == nil)
+                        }
+
+                        if selectedPreset.supportsSourceAssets {
+                            Divider()
+
+                            Text("Source Assets")
+                                .font(.subheadline)
+
+                            HStack {
+                                Button("Add Files") {
+                                    isImportingSourceAssets = true
+                                }
+                                Button("Use Finder Selection") {
+                                    Task { await useFinderSelectionAsSourceAssets() }
+                                }
+                                Button("Clear") {
+                                    queuedSourceAssets.removeAll()
+                                }
+                                .disabled(queuedSourceAssets.isEmpty)
+                            }
+
+                            if queuedSourceAssets.isEmpty {
+                                Text("No source assets attached.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(queuedSourceAssets) { asset in
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(asset.name)
+                                                    .font(.caption)
+                                                Text(asset.path)
+                                                    .font(.system(.caption2, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer()
+                                            Text(asset.kind.rawValue)
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                            if let byteSize = asset.byteSize {
+                                                Text(ByteCountFormatter.string(fromByteCount: byteSize, countStyle: .file))
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            Button("Remove") {
+                                                removeSourceAsset(id: asset.id)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text("Operator Notes")
+                                .font(.subheadline)
+                            TextEditor(text: $workflowNotes)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(minHeight: 80)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(.separator, lineWidth: 1)
+                                )
                         }
 
                         Divider()
@@ -174,6 +253,13 @@ struct ProductionDashboardView: View {
                                     .font(.caption)
                             }
 
+                            Text("Workflow version: \(selectedJob.workflowVersion)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("Approval policy: \(selectedJob.approvalMode.title)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+
                             if let targetPath = selectedJob.exportTargetPath {
                                 HStack {
                                     Text(targetPath)
@@ -183,6 +269,41 @@ struct ProductionDashboardView: View {
                                     Spacer()
                                     Button("Open Target") {
                                         Task { _ = await appState.openFinderPath(targetPath) }
+                                    }
+                                }
+                            }
+
+                            if let notes = selectedJob.notes {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Notes")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text(notes)
+                                        .font(.caption)
+                                        .textSelection(.enabled)
+                                }
+                            }
+
+                            if !selectedJob.sourceAssets.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Source Assets")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    ForEach(selectedJob.sourceAssets) { asset in
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(asset.name)
+                                                    .font(.caption)
+                                                Text(asset.path)
+                                                    .font(.system(.caption2, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer()
+                                            Button("Open") {
+                                                Task { _ = await appState.openFinderPath(asset.path) }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -220,6 +341,10 @@ struct ProductionDashboardView: View {
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                                     .lineLimit(2)
+
+                                if let metadata = activeArtifactMetadata {
+                                    ArtifactMetadataView(metadata: metadata)
+                                }
 
                                 ArtifactPreview(path: artifactPath)
 
@@ -331,11 +456,31 @@ struct ProductionDashboardView: View {
         .navigationTitle("Production")
         .task {
             await readiness.refreshComputerUse()
-            if selectedExportTargetID == nil {
-                selectedExportTargetID = production.defaultExportTarget?.id
+            hydrateSessionPreferencesIfNeeded()
+        }
+        .fileImporter(
+            isPresented: $isImportingSourceAssets,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            handleImportedSourceAssets(result)
+        }
+        .onChange(of: selectedPreset) { _, newValue in
+            session.preferredPreset = newValue
+            if !newValue.supportsSourceAssets {
+                queuedSourceAssets.removeAll()
+                workflowNotes = ""
             }
-            if selectedJobID == nil {
-                selectedJobID = production.jobs.first?.id
+        }
+        .onChange(of: selectedExportTargetID) { _, newValue in
+            session.preferredExportTargetID = newValue
+        }
+        .onChange(of: selectedApprovalMode) { _, newValue in
+            session.preferredApprovalMode = newValue
+        }
+        .onChange(of: selectedJobID) { _, newValue in
+            if let newValue, production.jobs.contains(where: { $0.id == newValue }) {
+                selectedArtifactPath = production.events(for: newValue).compactMap(\.screenshotPath).first
             }
         }
     }
@@ -376,6 +521,13 @@ struct ProductionDashboardView: View {
         return selectedJobEvents.compactMap(\.screenshotPath).first
     }
 
+    private var activeArtifactMetadata: DocumentMetadata? {
+        guard let activeArtifactPath else {
+            return nil
+        }
+        return DocumentInspector.inspect(path: activeArtifactPath)
+    }
+
     private func targetLabel(for target: ExportTarget) -> String {
         target.isDefault ? "\(target.name) • default" : target.name
     }
@@ -384,8 +536,13 @@ struct ProductionDashboardView: View {
         production.queueWorkflowJob(
             client: "Manual",
             preset: selectedPreset,
-            exportTargetID: selectedExportTargetID
+            exportTargetID: selectedExportTargetID,
+            sourceAssets: queuedSourceAssets,
+            notes: workflowNotes,
+            approvalMode: selectedApprovalMode
         )
+        queuedSourceAssets.removeAll()
+        workflowNotes = ""
     }
 
     private func setSelectedDefaultTarget() {
@@ -413,6 +570,54 @@ struct ProductionDashboardView: View {
             return
         }
         _ = await appState.openFinderPath(target.path)
+    }
+
+    private func handleImportedSourceAssets(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            appendSourceAssets(paths: urls.map(\.path))
+        case .failure(let error):
+            exportTargetStatus = error.localizedDescription
+        }
+    }
+
+    private func appendSourceAssets(paths: [String]) {
+        let existingPaths = Set(queuedSourceAssets.map(\.path))
+        let additions = paths.compactMap(SourceAsset.from).filter { !existingPaths.contains($0.path) }
+        queuedSourceAssets.append(contentsOf: additions)
+    }
+
+    private func removeSourceAsset(id: UUID) {
+        queuedSourceAssets.removeAll { $0.id == id }
+    }
+
+    private func useFinderSelectionAsSourceAssets() async {
+        let result = await appState.fetchFinderSelectionPaths()
+        switch result {
+        case .success(let paths):
+            appendSourceAssets(paths: paths)
+            exportTargetStatus = paths.isEmpty ? "Finder selection is empty." : "Added \(paths.count) Finder-selected item(s)."
+        case .failure(let error):
+            exportTargetStatus = error.localizedDescription
+        }
+    }
+
+    private func hydrateSessionPreferencesIfNeeded() {
+        if selectedPreset != session.preferredPreset {
+            selectedPreset = session.preferredPreset
+        }
+        if selectedExportTargetID == nil {
+            selectedExportTargetID = session.preferredExportTargetID ?? production.defaultExportTarget?.id
+        }
+        if selectedApprovalMode != session.preferredApprovalMode {
+            selectedApprovalMode = session.preferredApprovalMode
+        }
+        if selectedJobID == nil {
+            selectedJobID = production.jobs.first?.id
+        }
+        if let selectedJobID {
+            selectedArtifactPath = production.events(for: selectedJobID).compactMap(\.screenshotPath).first
+        }
     }
 
     private func discoverFcpElements() async {
@@ -450,6 +655,12 @@ struct JobRow: View {
             if let preset = job.workflowPreset {
                 Text(preset.title)
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !job.sourceAssets.isEmpty {
+                Text("\(job.sourceAssets.count) source asset(s)")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
 
@@ -585,6 +796,38 @@ private struct ArtifactPreview: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120, alignment: .leading)
+            }
+        }
+    }
+}
+
+private struct ArtifactMetadataView: View {
+    let metadata: DocumentMetadata
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let byteSize = metadata.byteSize {
+                Text("Size: \(ByteCountFormatter.string(fromByteCount: byteSize, countStyle: .file))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let width = metadata.pixelWidth, let height = metadata.pixelHeight {
+                Text("Dimensions: \(width) × \(height)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let contentType = metadata.contentType {
+                Text("Type: \(contentType)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let modifiedAt = metadata.modifiedAt {
+                Text("Modified: \(modifiedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }

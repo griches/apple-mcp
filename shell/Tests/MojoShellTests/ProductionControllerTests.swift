@@ -173,11 +173,27 @@ final class ProductionControllerTests: XCTestCase {
             stepsProvider: { [] }
         )
 
-        controller.queueWorkflowJob(client: "QA", preset: .fcpExportCurrentTimeline)
+        controller.queueWorkflowJob(
+            client: "QA",
+            preset: .fcpExportCurrentTimeline,
+            sourceAssets: [
+                SourceAsset(
+                    path: "/tmp/input.mov",
+                    name: "input.mov",
+                    kind: .video,
+                    byteSize: 1024
+                ),
+            ],
+            notes: "operator note",
+            approvalMode: .alwaysAsk
+        )
 
         XCTAssertEqual(controller.jobs.last?.workflowPreset, .fcpExportCurrentTimeline)
         XCTAssertEqual(controller.jobs.last?.exportTargetPath, targetPath)
         XCTAssertEqual(controller.jobs.last?.appTarget, .finalCutPro)
+        XCTAssertEqual(controller.jobs.last?.sourceAssets.count, 1)
+        XCTAssertEqual(controller.jobs.last?.notes, "operator note")
+        XCTAssertEqual(controller.jobs.last?.approvalMode, .alwaysAsk)
     }
 
     func testMotionPlaceholderCompletesWithoutStartingComputerUseSession() async throws {
@@ -323,6 +339,80 @@ final class ProductionControllerTests: XCTestCase {
         controller.retryFailedJob(id: jobID)
         XCTAssertEqual(controller.jobs.first?.status, .queued)
         XCTAssertNil(controller.jobs.first?.errorMessage)
+    }
+
+    func testNeverAskApprovalModeRunsWithoutPendingApproval() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: JobStore(fileURL: root.appendingPathComponent("jobs.json")),
+            eventStore: JobEventStore(fileURL: root.appendingPathComponent("events.json")),
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            workflowPlanProvider: { job in
+                WorkflowPlan(
+                    preset: job.workflowPreset ?? .fcpExportCurrentTimeline,
+                    steps: [
+                        WorkflowStep.keypress(
+                            "Approve Export",
+                            key: "cmd+e",
+                            approvalPrompt: "Confirm export settings",
+                            delay: 0
+                        ),
+                    ],
+                    requiresExportPreflight: false,
+                    completionMessage: "Approval workflow complete.",
+                    placeholderMessage: nil
+                )
+            }
+        )
+
+        controller.queueWorkflowJob(client: "QA", preset: .fcpExportCurrentTimeline, approvalMode: .neverAsk)
+        await controller.runNextWorkflow()
+
+        XCTAssertNil(controller.pendingApproval)
+        XCTAssertEqual(controller.jobs.first?.status, .completed)
+    }
+
+    func testAlwaysAskApprovalModePausesEvenWithoutStepPrompt() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mojoshell-production-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let controller = ProductionController(
+            computerUseProvider: ControllerTestComputerUseProvider(),
+            jobStore: JobStore(fileURL: root.appendingPathComponent("jobs.json")),
+            eventStore: JobEventStore(fileURL: root.appendingPathComponent("events.json")),
+            screenshotStore: ScreenshotStore(directoryURL: root.appendingPathComponent("screens")),
+            preflightCheck: {},
+            workflowPlanProvider: { job in
+                WorkflowPlan(
+                    preset: job.workflowPreset ?? .fcpExportCurrentTimeline,
+                    steps: [
+                        WorkflowStep.keypress("Background Step", key: "cmd+9", delay: 0),
+                    ],
+                    requiresExportPreflight: false,
+                    completionMessage: "Approval workflow complete.",
+                    placeholderMessage: nil
+                )
+            }
+        )
+
+        controller.queueWorkflowJob(client: "QA", preset: .fcpMonitorBackgroundTasks, approvalMode: .alwaysAsk)
+        let runTask = Task { await controller.runNextWorkflow() }
+
+        try await waitUntil { controller.pendingApproval != nil }
+        XCTAssertEqual(controller.pendingApproval?.stepDescription, "Background Step")
+
+        controller.approvePendingStep()
+        await runTask.value
+
+        XCTAssertEqual(controller.jobs.first?.status, .completed)
     }
 
     func testEventsForJobReturnsOnlyMatchingHistory() throws {

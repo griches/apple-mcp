@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum ShellView: String, CaseIterable, Identifiable {
+enum ShellView: String, CaseIterable, Identifiable, Codable, Sendable {
     case cockpit = "Cockpit"
     case terminal = "Agent Terminal"
     case production = "Production"
@@ -25,13 +25,13 @@ enum ShellView: String, CaseIterable, Identifiable {
 struct ContentView: View {
     @EnvironmentObject private var audit: AuditController
     @EnvironmentObject private var readiness: ReadinessState
+    @EnvironmentObject private var session: ShellSessionController
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selected: ShellView? = .cockpit
     @State private var isCommandPalettePresented = false
 
     var body: some View {
         NavigationSplitView {
-            List(ShellView.allCases, selection: $selected) { view in
+            List(ShellView.allCases, selection: selectedBinding) { view in
                 Label(view.rawValue, systemImage: view.icon)
                     .tag(view)
             }
@@ -41,7 +41,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 CoreIssuesBanner()
                 Group {
-                    switch selected ?? .cockpit {
+                    switch session.selectedView {
                     case .cockpit:
                         CockpitView()
                     case .terminal:
@@ -66,13 +66,12 @@ struct ContentView: View {
             FirstRunSheet()
         }
         .sheet(isPresented: $isCommandPalettePresented) {
-            CommandPaletteView(isPresented: $isCommandPalettePresented, selectedView: $selected)
+            CommandPaletteView(isPresented: $isCommandPalettePresented, selectedView: selectedBinding)
         }
         .task {
             await readiness.refresh()
         }
-        .onChange(of: selected) { _, newValue in
-            guard let newValue else { return }
+        .onChange(of: session.selectedView) { _, newValue in
             audit.record(category: .navigation, title: "Selected view", detail: newValue.rawValue)
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -82,5 +81,15 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private var selectedBinding: Binding<ShellView?> {
+        Binding<ShellView?>(
+            get: { session.selectedView },
+            set: { newValue in
+                guard let newValue else { return }
+                session.selectedView = newValue
+            }
+        )
     }
 }

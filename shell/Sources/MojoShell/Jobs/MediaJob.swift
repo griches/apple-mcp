@@ -21,6 +21,10 @@ struct MediaJob: Identifiable, Codable, Equatable, Sendable {
     var appTarget: WorkflowAppTarget?
     var exportTargetName: String?
     var exportTargetPath: String?
+    var sourceAssets: [SourceAsset]
+    var notes: String?
+    var workflowVersion: String
+    var approvalMode: WorkflowApprovalMode
 
     init(
         id: UUID = UUID(),
@@ -34,7 +38,11 @@ struct MediaJob: Identifiable, Codable, Equatable, Sendable {
         workflowPreset: ProductionWorkflowPreset? = nil,
         appTarget: WorkflowAppTarget? = nil,
         exportTargetName: String? = nil,
-        exportTargetPath: String? = nil
+        exportTargetPath: String? = nil,
+        sourceAssets: [SourceAsset] = [],
+        notes: String? = nil,
+        workflowVersion: String = "v1",
+        approvalMode: WorkflowApprovalMode = .smart
     ) {
         self.id = id
         self.name = name
@@ -48,5 +56,9 @@ struct MediaJob: Identifiable, Codable, Equatable, Sendable {
         self.appTarget = appTarget
         self.exportTargetName = exportTargetName
         self.exportTargetPath = exportTargetPath
+        self.sourceAssets = sourceAssets
+        self.notes = notes
+        self.workflowVersion = workflowVersion
+        self.approvalMode = approvalMode
     }
 }

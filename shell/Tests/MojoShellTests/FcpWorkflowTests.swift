@@ -137,11 +137,11 @@ final class FcpWorkflowTests: XCTestCase {
 
     func testExecutorFallsBackToCoordinatesWhenAXFails() async throws {
         let stub = CapturingComputerUseProvider()
-        // AX query will fail (FCP not running), but there is a fallback coordinate
+        // AX query will fail because the app name is fake, but there is a fallback coordinate.
         let steps = [
             WorkflowStep.click(
                 "Click Export",
-                app: "Final Cut Pro",
+                app: "__NonExistentApp__",
                 buttonTitled: "Export",
                 fallback: "640,400"
             ),
@@ -160,7 +160,7 @@ final class FcpWorkflowTests: XCTestCase {
     func testExecutorThrowsWhenAXFailsAndNoFallback() async throws {
         let stub = CapturingComputerUseProvider()
         let steps = [
-            WorkflowStep.click("Click Export", app: "Final Cut Pro", buttonTitled: "Export"),
+            WorkflowStep.click("Click Export", app: "__NonExistentApp__", buttonTitled: "Export"),
         ]
 
         let sessionId = try await stub.startSession()

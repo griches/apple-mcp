@@ -7,10 +7,12 @@ struct MojoShellApp: App {
     @StateObject private var audit: AuditController
     @StateObject private var readiness: ReadinessState
     @StateObject private var production: ProductionController
+    @StateObject private var session: ShellSessionController
 
     init() {
         let notifications = AppNotificationManager()
         let audit = AuditController()
+        let session = ShellSessionController()
         let daemonManager = DaemonManager(
             onRuntimeStateChanged: { previous, current in
                 audit.record(
@@ -42,6 +44,7 @@ struct MojoShellApp: App {
         let computerUseProvider: any ComputerUseProvider = CuaComputerUseProvider()
         let nativeExecutor: any NativeToolExecuting = NativeToolExecutor(repoRoot: daemonManager.repoRoot)
         _audit = StateObject(wrappedValue: audit)
+        _session = StateObject(wrappedValue: session)
         _appState = StateObject(
             wrappedValue: AppState(
                 daemons: daemonManager,
@@ -65,17 +68,27 @@ struct MojoShellApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("MojoShell", id: "main") {
             ContentView()
                 .environmentObject(appState)
                 .environmentObject(audit)
                 .environmentObject(readiness)
                 .environmentObject(production)
+                .environmentObject(session)
                 .frame(minWidth: 1000, minHeight: 650)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
+        }
+
+        MenuBarExtra("MojoShell", systemImage: "switch.2") {
+            MenuBarShellView()
+                .environmentObject(appState)
+                .environmentObject(audit)
+                .environmentObject(readiness)
+                .environmentObject(production)
+                .environmentObject(session)
         }
     }
 }

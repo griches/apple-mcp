@@ -220,13 +220,15 @@ struct WorkflowExecutor {
         steps: [WorkflowStep],
         sessionId: String,
         onProgress: @escaping (String) -> Void,
+        shouldRequestApproval: ((Int, WorkflowStep) -> Bool)? = nil,
         onStepResult: ((Int, WorkflowStep, ComputerUseResult) -> Void)? = nil,
         onApprovalRequested: ((Int, WorkflowStep) async -> Bool)? = nil
     ) async throws {
         for (index, step) in steps.enumerated() {
             onProgress("[\(index + 1)/\(steps.count)] \(step.description)…")
 
-            if step.approvalPrompt != nil {
+            let requiresApproval = shouldRequestApproval?(index, step) ?? (step.approvalPrompt != nil)
+            if requiresApproval {
                 let approved = await onApprovalRequested?(index, step) ?? false
                 if !approved {
                     throw WorkflowError.approvalRejected(step.description)

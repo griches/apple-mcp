@@ -65,6 +65,28 @@ enum ProductionWorkflowPreset: String, Codable, CaseIterable, Identifiable, Send
             return false
         }
     }
+
+    var workflowVersion: String {
+        switch self {
+        case .fcpExportCurrentTimeline:
+            return "fcp-export-v2"
+        case .fcpMonitorBackgroundTasks:
+            return "fcp-monitor-v1"
+        case .motionPlaceholderReview:
+            return "motion-review-v1"
+        case .motionPlaceholderExport:
+            return "motion-export-v1"
+        }
+    }
+
+    var supportsSourceAssets: Bool {
+        switch self {
+        case .fcpExportCurrentTimeline, .motionPlaceholderReview, .motionPlaceholderExport:
+            return true
+        case .fcpMonitorBackgroundTasks:
+            return false
+        }
+    }
 }
 
 struct WorkflowPlan: Sendable {

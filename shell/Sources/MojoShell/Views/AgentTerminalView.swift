@@ -1,25 +1,40 @@
 import SwiftUI
 
-struct TerminalEntry: Identifiable, Equatable {
-    let id = UUID()
+struct TerminalEntry: Identifiable, Equatable, Codable, Sendable {
+    let id: UUID
     let role: Role
     let text: String
-    let timestamp = Date()
+    let timestamp: Date
 
-    enum Role: Equatable {
+    enum Role: String, Codable, Equatable, Sendable {
         case user
         case agent
         case system
     }
+
+    init(
+        id: UUID = UUID(),
+        role: Role,
+        text: String,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.timestamp = timestamp
+    }
+
+    static let initialSystemEntry = TerminalEntry(
+        role: .system,
+        text: "MojoShell Agent Terminal ready. Type a command."
+    )
 }
 
 struct AgentTerminalView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var readiness: ReadinessState
+    @EnvironmentObject private var session: ShellSessionController
     @State private var input = ""
-    @State private var history: [TerminalEntry] = [
-        TerminalEntry(role: .system, text: "MojoShell Agent Terminal ready. Type a command.")
-    ]
     @State private var isProcessing = false
 
     private let deterministicRouter = DeterministicRouter()
@@ -29,15 +44,15 @@ struct AgentTerminalView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 6) {
-                        ForEach(history) { entry in
+                        ForEach(session.terminalHistory) { entry in
                             TerminalEntryRow(entry: entry)
                                 .id(entry.id)
                         }
                     }
                     .padding()
                 }
-                .onChange(of: history.count) { _, _ in
-                    if let id = history.last?.id {
+                .onChange(of: session.terminalHistory.count) { _, _ in
+                    if let id = session.terminalHistory.last?.id {
                         proxy.scrollTo(id, anchor: .bottom)
                     }
                 }
@@ -54,6 +69,11 @@ struct AgentTerminalView: View {
             }
 
             HStack {
+                Button("Clear") {
+                    session.clearTerminalHistory()
+                }
+                .disabled(isProcessing)
+
                 TextField("Type a command...", text: $input)
                     .font(.system(.body, design: .monospaced))
                     .textFieldStyle(.plain)
@@ -86,28 +106,28 @@ struct AgentTerminalView: View {
 
         input = ""
         isProcessing = true
-        history.append(TerminalEntry(role: .user, text: command))
+        session.appendTerminalEntry(TerminalEntry(role: .user, text: command))
 
         if let tool = deterministicRouter.route(command) {
-            history.append(TerminalEntry(role: .system, text: "→ deterministic route: \(tool.server)/\(tool.tool)"))
+            session.appendTerminalEntry(TerminalEntry(role: .system, text: "→ deterministic route: \(tool.server)/\(tool.tool)"))
             let result = await appState.execute(tool)
             switch result {
             case .success(let output):
-                history.append(TerminalEntry(role: .agent, text: output.text))
+                session.appendTerminalEntry(TerminalEntry(role: .agent, text: output.text))
             case .failure(let error):
-                history.append(TerminalEntry(role: .agent, text: "Error: \(error.localizedDescription)"))
+                session.appendTerminalEntry(TerminalEntry(role: .agent, text: "Error: \(error.localizedDescription)"))
             }
         } else {
-            history.append(TerminalEntry(role: .system, text: "→ escalating to LLM stack (\(appState.llmProviderStackDescription))..."))
+            session.appendTerminalEntry(TerminalEntry(role: .system, text: "→ escalating to LLM stack (\(appState.llmProviderStackDescription))..."))
             let result = await appState.resolveWithLLM(
                 prompt: command,
                 availableTools: deterministicRouter.availableTools
             )
             switch result {
             case .success(let text):
-                history.append(TerminalEntry(role: .agent, text: text))
+                session.appendTerminalEntry(TerminalEntry(role: .agent, text: text))
             case .failure(let error):
-                history.append(TerminalEntry(role: .agent, text: "LLM error: \(error.localizedDescription)"))
+                session.appendTerminalEntry(TerminalEntry(role: .agent, text: "LLM error: \(error.localizedDescription)"))
             }
         }
 

@@ -17,7 +17,18 @@ final class JobStoreTests: XCTestCase {
                 progress: 0.0,
                 createdAt: Date(timeIntervalSince1970: 100),
                 completedAt: nil,
-                errorMessage: nil
+                errorMessage: nil,
+                sourceAssets: [
+                    SourceAsset(
+                        path: "/tmp/input.mov",
+                        name: "input.mov",
+                        kind: .video,
+                        byteSize: 1024
+                    ),
+                ],
+                notes: "operator note",
+                workflowVersion: "test-v2",
+                approvalMode: .alwaysAsk
             ),
         ]
 

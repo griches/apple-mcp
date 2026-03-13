@@ -95,6 +95,12 @@ private struct AuditMetadataRow: View {
                     }
                 }
                 .font(.caption2)
+
+                if let metadata = DocumentInspector.inspect(path: path) {
+                    Text(metadataSummary(metadata))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -108,5 +114,19 @@ private struct AuditMetadataRow: View {
             return nil
         }
         return FileManager.default.fileExists(atPath: trimmed) ? trimmed : nil
+    }
+
+    private func metadataSummary(_ metadata: DocumentMetadata) -> String {
+        var parts: [String] = []
+        if let byteSize = metadata.byteSize {
+            parts.append(ByteCountFormatter.string(fromByteCount: byteSize, countStyle: .file))
+        }
+        if let width = metadata.pixelWidth, let height = metadata.pixelHeight {
+            parts.append("\(width) × \(height)")
+        }
+        if let contentType = metadata.contentType {
+            parts.append(contentType)
+        }
+        return parts.joined(separator: " • ")
     }
 }

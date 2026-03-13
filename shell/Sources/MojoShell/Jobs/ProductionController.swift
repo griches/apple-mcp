@@ -83,12 +83,21 @@ final class ProductionController: ObservableObject {
             .sorted { $0.timestamp > $1.timestamp }
     }
 
-    func queueAssemblyJob(name: String, client: String) {
+    func queueAssemblyJob(
+        name: String,
+        client: String,
+        sourceAssets: [SourceAsset] = [],
+        notes: String? = nil,
+        approvalMode: WorkflowApprovalMode = .smart
+    ) {
         queueWorkflowJob(
             name: name,
             client: client,
             preset: .fcpExportCurrentTimeline,
-            exportTargetID: defaultExportTarget?.id
+            exportTargetID: defaultExportTarget?.id,
+            sourceAssets: sourceAssets,
+            notes: notes,
+            approvalMode: approvalMode
         )
     }
 
@@ -96,7 +105,10 @@ final class ProductionController: ObservableObject {
         name: String? = nil,
         client: String,
         preset: ProductionWorkflowPreset,
-        exportTargetID: UUID? = nil
+        exportTargetID: UUID? = nil,
+        sourceAssets: [SourceAsset] = [],
+        notes: String? = nil,
+        approvalMode: WorkflowApprovalMode = .smart
     ) {
         let exportTarget = resolvedExportTarget(for: preset, requestedID: exportTargetID)
         let jobName = name ?? defaultJobName(for: preset)
@@ -111,7 +123,11 @@ final class ProductionController: ObservableObject {
             workflowPreset: preset,
             appTarget: preset.appTarget,
             exportTargetName: exportTarget?.name,
-            exportTargetPath: exportTarget?.path
+            exportTargetPath: exportTarget?.path,
+            sourceAssets: sourceAssets,
+            notes: notes?.trimmedNilIfEmpty,
+            workflowVersion: preset.workflowVersion,
+            approvalMode: approvalMode
         )
 
         jobs.append(job)
@@ -119,6 +135,12 @@ final class ProductionController: ObservableObject {
         recordEvent(jobID: job.id, type: .queued, message: "Job queued: \(jobName)", progress: 0.0)
         if let exportTarget {
             recordEvent(jobID: job.id, type: .info, message: "Export target: \(exportTarget.name) -> \(exportTarget.path)")
+        }
+        if !sourceAssets.isEmpty {
+            recordEvent(jobID: job.id, type: .info, message: "Source assets attached: \(sourceAssets.count)")
+        }
+        if let notes = notes?.trimmedNilIfEmpty {
+            recordEvent(jobID: job.id, type: .info, message: "Operator notes: \(notes)")
         }
     }
 
@@ -280,6 +302,12 @@ final class ProductionController: ObservableObject {
                         }
                     }
                 },
+                shouldRequestApproval: { [weak self] _, step in
+                    guard let self else {
+                        return step.approvalPrompt != nil
+                    }
+                    return self.shouldRequestApproval(for: step, mode: job.approvalMode)
+                },
                 onStepResult: { [weak self] stepIndex, _, result in
                     Task { @MainActor [weak self] in
                         guard let self else { return }
@@ -437,6 +465,9 @@ final class ProductionController: ObservableObject {
                 if let preset = job.workflowPreset?.title {
                     metadata["preset"] = preset
                 }
+                metadata["workflow_version"] = job.workflowVersion
+                metadata["approval_mode"] = job.approvalMode.rawValue
+                metadata["source_asset_count"] = "\(job.sourceAssets.count)"
                 if let target = job.exportTargetPath {
                     metadata["export_target"] = target
                 }
@@ -447,6 +478,17 @@ final class ProductionController: ObservableObject {
             auditRecorder(.production, "Job event", message, metadata)
         } catch {
             workflowLog = "Event persistence failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func shouldRequestApproval(for step: WorkflowStep, mode: WorkflowApprovalMode) -> Bool {
+        switch mode {
+        case .smart:
+            return step.approvalPrompt != nil
+        case .alwaysAsk:
+            return true
+        case .neverAsk:
+            return false
         }
     }
 
@@ -576,6 +618,13 @@ final class ProductionController: ObservableObject {
         }
 
         return "Preflight error: \(error.localizedDescription)"
+    }
+}
+
+private extension String {
+    var trimmedNilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
