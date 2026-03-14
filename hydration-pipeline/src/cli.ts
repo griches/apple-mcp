@@ -1,5 +1,22 @@
 #!/usr/bin/env node
-import { resolveConfig, type CliOptions, type HydrationCommand, type MessagesSourceMode, type TranscriptSourceMode } from "./config.js";
+import { join } from "node:path";
+import {
+  resolveConfig,
+  type CliOptions,
+  type HydrationCommand,
+  type MessagesSourceMode,
+  type TranscriptSourceMode,
+} from "./config.js";
+import { ensureArtifactDirectories } from "./output/artifactPaths.js";
+import { writeJsonArtifact } from "./output/writeArtifacts.js";
+import { bootstrapCorpusContext } from "./providers/corpusSource.js";
+import { harvestMail } from "./providers/mailSource.js";
+import { harvestMessages } from "./providers/messagesSource.js";
+import { normalizeMailHarvest, selectDavidFirstPersonMail } from "./normalize/mailNormalization.js";
+import {
+  normalizeMessagesHarvest,
+  selectDavidFirstPersonMessages,
+} from "./normalize/messagesNormalization.js";
 
 const HELP_TEXT = `North Star Hydration Pipeline
 
@@ -21,6 +38,8 @@ Options:
   --messages-source <live|export>  Messages ingestion mode (default: export)
   --transcript-source <otter_mail|fireflies_vector|none>
                                    Transcript ingestion mode (default: otter_mail)
+  --inbox-limit <n>                Mail inbox messages per persona to fetch (default: 3)
+  --sent-limit <n>                 Mail sent messages per persona to fetch (default: 1)
   --output <path>                  Output root relative to repo root
   --run-id <id>                    Override generated run id
   --help                           Show this help text
@@ -40,6 +59,14 @@ function isMessagesSourceMode(value: string): value is MessagesSourceMode {
 
 function isTranscriptSourceMode(value: string): value is TranscriptSourceMode {
   return ["otter_mail", "fireflies_vector", "none"].includes(value);
+}
+
+function parsePositiveInt(flag: string, value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid value for ${flag}: ${value}`);
+  }
+  return parsed;
 }
 
 function parseArgs(argv: string[]): CliOptions | null {
@@ -98,6 +125,12 @@ function parseArgs(argv: string[]): CliOptions | null {
         }
         options.transcriptSource = value;
         break;
+      case "--inbox-limit":
+        options.inboxLimit = parsePositiveInt(token, value);
+        break;
+      case "--sent-limit":
+        options.sentLimit = parsePositiveInt(token, value);
+        break;
       default:
         throw new Error(`Unknown option: ${token}`);
     }
@@ -124,6 +157,8 @@ function printPlannedRun(config: ReturnType<typeof resolveConfig>): void {
           to: config.to ?? null,
           messagesSource: config.messagesSource,
           transcriptSource: config.transcriptSource,
+          inboxLimit: config.inboxLimit,
+          sentLimit: config.sentLimit,
           artifactPaths: config.artifactPaths,
         },
       },
@@ -134,7 +169,68 @@ function printPlannedRun(config: ReturnType<typeof resolveConfig>): void {
   process.stdout.write("\n");
 }
 
-function main(): void {
+async function runHarvest(config: ReturnType<typeof resolveConfig>): Promise<void> {
+  ensureArtifactDirectories(config.artifactPaths);
+
+  const bootstrap = await bootstrapCorpusContext(config.repoRoot);
+  const mailHarvest = await harvestMail(config.repoRoot, {
+    bootstrap,
+    inboxLimit: config.inboxLimit,
+    sentLimit: config.sentLimit,
+    includeSent: config.sentLimit > 0,
+  });
+  const normalizedMail = normalizeMailHarvest(mailHarvest);
+  const davidFirstPersonMail = selectDavidFirstPersonMail(normalizedMail);
+  const messagesHarvest = await harvestMessages(config.repoRoot, {
+    sourceMode: config.messagesSource,
+    limitPerChat: config.inboxLimit,
+  });
+  const normalizedMessages = normalizeMessagesHarvest(messagesHarvest);
+  const davidFirstPersonMessages = selectDavidFirstPersonMessages(normalizedMessages);
+
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "bootstrap.json"), bootstrap);
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "mail-harvest.json"), mailHarvest);
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "mail-normalized.json"), normalizedMail);
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "david-first-person-mail.json"), davidFirstPersonMail);
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "messages-harvest.json"), messagesHarvest);
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "messages-normalized.json"), normalizedMessages);
+  writeJsonArtifact(
+    join(config.artifactPaths.harvestDir, "david-first-person-messages.json"),
+    davidFirstPersonMessages,
+  );
+
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        status: "harvest_complete",
+        runId: config.runId,
+        outputDir: config.artifactPaths.baseDir,
+        bootstrap: {
+          corpus: bootstrap.overview.corpus_name,
+          personas: bootstrap.personas.length,
+          meetingIntelHints: bootstrap.meetingIntelHints.length,
+        },
+        mail: {
+          personaAccounts: mailHarvest.accounts.length,
+          normalizedDocuments: normalizedMail.length,
+          davidFirstPersonDocuments: davidFirstPersonMail.length,
+          errors: mailHarvest.errors,
+        },
+        messages: {
+          sourceMode: messagesHarvest.sourceMode,
+          chats: messagesHarvest.chats.length,
+          normalizedDocuments: normalizedMessages.length,
+          davidFirstPersonDocuments: davidFirstPersonMessages.length,
+          errors: messagesHarvest.errors,
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+async function main(): Promise<void> {
   try {
     const parsed = parseArgs(process.argv.slice(2));
 
@@ -144,6 +240,11 @@ function main(): void {
     }
 
     const config = resolveConfig(parsed);
+    if (config.command === "harvest") {
+      await runHarvest(config);
+      return;
+    }
+
     printPlannedRun(config);
   } catch (error) {
     process.stderr.write(`Error: ${(error as Error).message}\n\n`);
@@ -152,4 +253,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((error) => {
+  process.stderr.write(`Fatal error: ${(error as Error).message}\n`);
+  process.exit(1);
+});
