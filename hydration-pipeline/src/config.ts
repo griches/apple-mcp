@@ -18,6 +18,7 @@ export interface HydrationConfig {
   transcriptSource: TranscriptSourceMode;
   inboxLimit: number;
   sentLimit: number;
+  notesLimit: number;
   artifactPaths: ArtifactPaths;
 }
 
@@ -33,6 +34,7 @@ export interface CliOptions {
   transcriptSource?: TranscriptSourceMode;
   inboxLimit?: number;
   sentLimit?: number;
+  notesLimit?: number;
 }
 
 export function resolveRepoRoot(cwd = process.cwd()): string {
@@ -61,6 +63,7 @@ export function resolveConfig(options: CliOptions, cwd = process.cwd()): Hydrati
     transcriptSource: options.transcriptSource ?? "otter_mail",
     inboxLimit: options.inboxLimit ?? 3,
     sentLimit: options.sentLimit ?? 1,
+    notesLimit: options.notesLimit ?? 2,
     artifactPaths: createArtifactPaths(outputRoot, runId),
   };
 }

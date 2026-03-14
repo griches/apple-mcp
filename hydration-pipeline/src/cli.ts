@@ -12,11 +12,13 @@ import { writeJsonArtifact } from "./output/writeArtifacts.js";
 import { bootstrapCorpusContext } from "./providers/corpusSource.js";
 import { harvestMail } from "./providers/mailSource.js";
 import { harvestMessages } from "./providers/messagesSource.js";
+import { harvestNotes } from "./providers/notesSource.js";
 import { normalizeMailHarvest, selectDavidFirstPersonMail } from "./normalize/mailNormalization.js";
 import {
   normalizeMessagesHarvest,
   selectDavidFirstPersonMessages,
 } from "./normalize/messagesNormalization.js";
+import { normalizeNotesHarvest, selectDavidFirstPersonNotes } from "./normalize/notesNormalization.js";
 
 const HELP_TEXT = `North Star Hydration Pipeline
 
@@ -40,6 +42,7 @@ Options:
                                    Transcript ingestion mode (default: otter_mail)
   --inbox-limit <n>                Mail inbox messages per persona to fetch (default: 3)
   --sent-limit <n>                 Mail sent messages per persona to fetch (default: 1)
+  --notes-limit <n>                Notes to fetch per folder (default: 2)
   --output <path>                  Output root relative to repo root
   --run-id <id>                    Override generated run id
   --help                           Show this help text
@@ -131,6 +134,9 @@ function parseArgs(argv: string[]): CliOptions | null {
       case "--sent-limit":
         options.sentLimit = parsePositiveInt(token, value);
         break;
+      case "--notes-limit":
+        options.notesLimit = parsePositiveInt(token, value);
+        break;
       default:
         throw new Error(`Unknown option: ${token}`);
     }
@@ -159,6 +165,7 @@ function printPlannedRun(config: ReturnType<typeof resolveConfig>): void {
           transcriptSource: config.transcriptSource,
           inboxLimit: config.inboxLimit,
           sentLimit: config.sentLimit,
+          notesLimit: config.notesLimit,
           artifactPaths: config.artifactPaths,
         },
       },
@@ -187,6 +194,11 @@ async function runHarvest(config: ReturnType<typeof resolveConfig>): Promise<voi
   });
   const normalizedMessages = normalizeMessagesHarvest(messagesHarvest);
   const davidFirstPersonMessages = selectDavidFirstPersonMessages(normalizedMessages);
+  const notesHarvest = await harvestNotes(config.repoRoot, {
+    limitPerFolder: config.notesLimit,
+  });
+  const normalizedNotes = normalizeNotesHarvest(notesHarvest);
+  const davidFirstPersonNotes = selectDavidFirstPersonNotes(normalizedNotes);
 
   writeJsonArtifact(join(config.artifactPaths.harvestDir, "bootstrap.json"), bootstrap);
   writeJsonArtifact(join(config.artifactPaths.harvestDir, "mail-harvest.json"), mailHarvest);
@@ -198,6 +210,9 @@ async function runHarvest(config: ReturnType<typeof resolveConfig>): Promise<voi
     join(config.artifactPaths.harvestDir, "david-first-person-messages.json"),
     davidFirstPersonMessages,
   );
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "notes-harvest.json"), notesHarvest);
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "notes-normalized.json"), normalizedNotes);
+  writeJsonArtifact(join(config.artifactPaths.harvestDir, "david-first-person-notes.json"), davidFirstPersonNotes);
 
   process.stdout.write(
     `${JSON.stringify(
@@ -222,6 +237,14 @@ async function runHarvest(config: ReturnType<typeof resolveConfig>): Promise<voi
           normalizedDocuments: normalizedMessages.length,
           davidFirstPersonDocuments: davidFirstPersonMessages.length,
           errors: messagesHarvest.errors,
+        },
+        notes: {
+          folders: notesHarvest.discoveredFolders.length,
+          harvestedNotes: notesHarvest.harvestedNotes.length,
+          skippedNotes: notesHarvest.skippedNotes.length,
+          normalizedDocuments: normalizedNotes.length,
+          davidFirstPersonDocuments: davidFirstPersonNotes.length,
+          errors: notesHarvest.errors,
         },
       },
       null,
