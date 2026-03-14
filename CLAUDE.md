@@ -3,6 +3,9 @@
 ## Repo
 `apple-mcp` contains standalone MCP servers for Apple apps plus higher-level automation packages built on top of Mail and Notes.
 
+## Current Plan
+- `docs/plans/2026-03-13-apple-mcp-governed-roadmap.md` | governed sequencing document for hydration, shell, intelligence, and packaging work
+
 ## Canonical Brain
 | System | Role |
 |------|------|
