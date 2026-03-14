@@ -390,9 +390,9 @@ Prove that `apple-mcp` can harvest from deterministic local sources, normalize t
 
 #### Track E: Validation path
 
-- emit review mirror outputs
-- flag low-confidence and overclaimed rules
-- create a human review surface for the generated skills
+- freeze the validation contract and review vocabulary
+- define review mirror output shape and correction loop
+- defer validation implementation until the extraction and compiler path is real
 
 ### Explicit Cuts For This Sprint
 
@@ -409,6 +409,11 @@ Do not cut:
 2. normalized artifact contract
 3. evidence bundle extraction
 4. compiler endpoint for skills
+
+Deferred from this sprint:
+
+- validation implementation beyond contract and output-shape design
+- review UI or rich human-facing validation surfaces
 
 ## Key Decisions
 

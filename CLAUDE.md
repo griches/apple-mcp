@@ -5,6 +5,7 @@
 
 ## Current Plan
 - `docs/plans/2026-03-13-apple-mcp-governed-roadmap.md` | governed sequencing document for hydration, shell, intelligence, and packaging work
+- `docs/plans/2026-03-13-deterministic-hydration-spine-implementation-packet.md` | immediate implementation packet scoped to source spine, SignalDocument, Desktop/filesystem ingest, evidence, and compiler skeleton
 
 ## Canonical Brain
 | System | Role |
