@@ -163,6 +163,42 @@ end tell`;
   };
 }
 
+export async function getMessageSource(
+  mailboxName: string,
+  accountName: string,
+  messageId: number
+): Promise<{
+  id: number;
+  subject: string;
+  sender: string;
+  source: string;
+}> {
+  const safeMb = sanitize(mailboxName);
+  const safeAcct = sanitize(accountName);
+  const script = `
+tell application "Mail"
+  set mb to mailbox "${safeMb}" of account "${safeAcct}"
+  set matchedMsgs to (every message of mb whose id is ${messageId})
+  if (count of matchedMsgs) is 0 then
+    error "Message not found with id: ${messageId}"
+  end if
+  set m to item 1 of matchedMsgs
+  set mId to id of m
+  set mSubject to subject of m
+  set mSender to sender of m
+  set mSource to source of m
+  return (mId as text) & "${RECORD_DELIM}" & mSubject & "${RECORD_DELIM}" & mSender & "${RECORD_DELIM}" & mSource
+end tell`;
+  const raw = await runAppleScript(script);
+  const parts = raw.split(RECORD_DELIM);
+  return {
+    id: parseInt(parts[0]?.trim() || "0", 10),
+    subject: parts[1]?.trim() || "",
+    sender: parts[2]?.trim() || "",
+    source: parts[3] || "",
+  };
+}
+
 export async function searchMessages(
   query: string,
   mailboxName?: string,

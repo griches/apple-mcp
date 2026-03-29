@@ -69,6 +69,27 @@ server.registerTool(
   }
 );
 
+// ---- get_message_source ----
+server.registerTool(
+  "get_message_source",
+  {
+    description: "Get the raw RFC822 source of an email (includes all headers like List-Unsubscribe and the full HTML body). Use this when you need to find unsubscribe links or inspect email headers.",
+    inputSchema: z.object({
+      mailbox: z.string().describe("Name of the mailbox"),
+      account: z.string().describe("Name of the email account"),
+      message_id: z.number().describe("ID of the message to retrieve"),
+    }),
+  },
+  async ({ mailbox, account, message_id }) => {
+    try {
+      const message = await applescript.getMessageSource(mailbox, account, message_id);
+      return { content: [{ type: "text", text: JSON.stringify(message, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  }
+);
+
 // ---- search_messages ----
 server.registerTool(
   "search_messages",
