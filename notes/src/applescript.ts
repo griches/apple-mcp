@@ -137,9 +137,39 @@ end tell`;
   return runAppleScript(script);
 }
 
+/**
+ * Apple Notes derives a note's NAME from the first line of its BODY, so
+ * `set body of n to <content>` does not merely replace content -- it silently
+ * RENAMES the note whenever the new body does not lead with the existing title.
+ *
+ * createNote is unaffected: it sets `name` explicitly alongside `body`.
+ * updateNote sets only `body`, so a caller that sends new content without
+ * repeating the title as the first line loses the title. Observed against a
+ * note called "Grocery List" whose name was replaced by whatever text happened
+ * to lead the updated body.
+ *
+ * tests/applescript.test.ts already documents the coupling -- its fixtures keep
+ * the title in an <h1> "to preserve it after updates" -- but that only protects
+ * callers who remember to do it. This moves the guarantee into updateNote.
+ *
+ * Prepending the title when it is absent keeps name and body consistent the way
+ * Notes itself models them. Setting `name` after the body would instead let the
+ * name and the visible first line diverge.
+ *
+ * Exported because it is pure, so it can be unit-tested without touching a real
+ * Notes database.
+ */
+export function bodyPreservingTitle(title: string, body: string): string {
+  const leadingText = body.replace(/<[^>]*>/g, "").trimStart();
+  if (leadingText.startsWith(title.trim())) {
+    return body;
+  }
+  return `<h1>${title}</h1>${body}`;
+}
+
 export async function updateNote(title: string, body: string, folder?: string): Promise<string> {
   const safeTitle = sanitize(title);
-  const safeBody = sanitize(body);
+  const safeBody = sanitize(bodyPreservingTitle(title, body));
   let scope: string;
   if (folder) {
     const safeFolder = sanitize(folder);
