@@ -197,6 +197,49 @@ func getEvent(store: EKEventStore, title: String, calendarName: String?) {
     print(eventToJSON(event, includeDetails: true))
 }
 
+// MARK: - TCC responsibility (upstream issues #6 / #10)
+//
+// When an MCP host (Claude Desktop, Claude Code, ...) spawns this helper, macOS
+// treats the *host app* as the "responsible process" for privacy checks. Hosts
+// don't declare NSCalendarsFullAccessUsageDescription, so EventKit denies access
+// immediately, no prompt is shown, and nothing appears in System Settings.
+//
+// Fix: re-launch ourselves with the responsibility disclaimed, so this helper is
+// its own responsible process. Its embedded Info.plist (linked into __TEXT,
+// __info_plist at build time) carries the usage strings, so macOS shows a normal
+// "Apple MCP Calendar Helper would like to access your calendars" prompt and
+// lists the helper under Privacy & Security > Calendars.
+
+@_silgen_name("responsibility_spawnattrs_setdisclaim")
+private func responsibility_spawnattrs_setdisclaim(
+    _ attrs: UnsafeMutablePointer<posix_spawnattr_t?>, _ disclaim: Int32) -> Int32
+
+private let disclaimedEnvKey = "APPLE_MCP_CALENDAR_HELPER_DISCLAIMED"
+
+/// Re-exec with responsibility disclaimed; returns only in the child.
+func becomeResponsibleProcess() {
+    let env = ProcessInfo.processInfo.environment
+    if env[disclaimedEnvKey] != nil { return }
+
+    var attr: posix_spawnattr_t?
+    posix_spawnattr_init(&attr)
+    defer { posix_spawnattr_destroy(&attr) }
+    _ = responsibility_spawnattrs_setdisclaim(&attr, 1)
+
+    var childEnv = env
+    childEnv[disclaimedEnvKey] = "1"
+    let envp: [UnsafeMutablePointer<CChar>?] = childEnv.map { strdup("\($0.key)=\($0.value)") } + [nil]
+    let argv: [UnsafeMutablePointer<CChar>?] = CommandLine.arguments.map { strdup($0) } + [nil]
+    let path = Bundle.main.executablePath ?? CommandLine.arguments[0]
+
+    var pid: pid_t = 0
+    // stdin/stdout/stderr are inherited, so the caller still gets our output.
+    guard posix_spawn(&pid, path, nil, &attr, argv, envp) == 0 else { return } // fall back to in-process
+    var status: Int32 = 0
+    while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
+    exit((status & 0x7f) == 0 ? (status >> 8) & 0xff : 1)
+}
+
 // MARK: - Main
 
 func printUsage() -> Never {
@@ -214,6 +257,7 @@ func printUsage() -> Never {
 func main() {
     let args = CommandLine.arguments
     guard args.count >= 2 else { printUsage() }
+    becomeResponsibleProcess()
 
     let store = EKEventStore()
     let status = EKEventStore.authorizationStatus(for: .event)
@@ -222,7 +266,7 @@ func main() {
         if #available(macOS 14.0, *) {
             if status != .fullAccess {
                 guard requestAccess(store: store) else {
-                    exitWithError("Calendar access denied. Please grant access in System Settings > Privacy & Security > Calendars.")
+                    exitWithError("Calendar access denied. Open System Settings > Privacy & Security > Calendars and set Apple MCP Calendar Helper to Full Access.")
                 }
             }
         } else {

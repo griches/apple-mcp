@@ -9,14 +9,16 @@
   "files": [
     "build/**/*.js",
     "build/**/*.d.ts",
+    "build/reminders-helper",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:swift",
     "start": "node build/index.js",
     "test": "bun test",
     "test:clean": "bun test --bail",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "build:swift": "bash swift/build.sh"
   },
   "keywords": [
     "mcp",
