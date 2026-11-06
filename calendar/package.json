@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc && npm run build:swift",
-    "build:swift": "swiftc -O -target arm64-apple-macosx13.0 -o build/calendar-helper-arm64 swift/CalendarHelper.swift -framework EventKit -framework Foundation && swiftc -O -target x86_64-apple-macosx13.0 -o build/calendar-helper-x86_64 swift/CalendarHelper.swift -framework EventKit -framework Foundation && lipo -create build/calendar-helper-arm64 build/calendar-helper-x86_64 -output build/calendar-helper && rm build/calendar-helper-arm64 build/calendar-helper-x86_64",
+    "build:swift": "bash swift/build.sh",
     "start": "node build/index.js",
     "test": "bun test",
     "test:clean": "bun test --bail",

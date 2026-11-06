@@ -2,7 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import * as applescript from "./applescript.js";
+import * as applescript from "./eventkit.js";
 
 const readOnly = process.argv.includes("--read-only");
 const confirmDestructive = process.argv.includes("--confirm-destructive");

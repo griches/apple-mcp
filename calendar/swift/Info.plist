@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.apple-mcp.calendar-helper</string>
+	<key>CFBundleName</key>
+	<string>Apple MCP Calendar Helper</string>
+	<key>CFBundleDisplayName</key>
+	<string>Apple MCP Calendar Helper</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>The Apple Calendar MCP server reads your calendars so your AI assistant can list and search events.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>The Apple Calendar MCP server reads your calendars so your AI assistant can list and search events.</string>
+</dict>
+</plist>
